@@ -1,0 +1,64 @@
+/* ============================================================
+   StoryClaw — design tokens (ported from design spec)
+   ============================================================ */
+
+:root {
+  --copilot-w: 384px;
+  --script-font: "Noto Serif SC", serif;
+  --line-gap: 1.0;
+  --accent: #0098ff;
+  --accent-ai: #8b7cf6;
+  --c-role: #d292b8;
+  --c-outline: #6f9bd1;
+  --c-world: #6cb38f;
+}
+
+html[data-theme="dark"] {
+  --bg-0: #0f1116;
+  --bg-1: #161922;
+  --bg-2: #1c2029;
+  --bg-3: #232834;
+  --bg-editor: #14171f;
+  --paper: #1a1e27;
+  --ink: #e8e3d8;
+  --border: #262c38;
+  --border-soft: #20242e;
+  --text-0: #e9e6df;
+  --text-1: #b7bdc9;
+  --text-2: #79808e;
+  --text-3: #555c69;
+  --diff-add-bg: rgba(96,187,122,.14);
+  --diff-add-fg: #7fcf97;
+  --diff-del-bg: rgba(226,110,110,.13);
+  --diff-del-fg: #e08a8a;
+  --shadow: 0 12px 40px rgba(0,0,0,.45);
+  --on-air: #e2574f;
+  --c-role: #d292b8;
+  --c-outline: #7aa6dd;
+  --c-world: #6cb38f;
+}
+
+html[data-theme="light"] {
+  --bg-0: #ece8e1;
+  --bg-1: #f4f1ea;
+  --bg-2: #faf8f3;
+  --bg-3: #ece7dc;
+  --bg-editor: #e8e3d9;
+  --paper: #fbf9f4;
+  --ink: #1f1c14;
+  --border: #d9d2c4;
+  --border-soft: #e2dccf;
+  --text-0: #23201a;
+  --text-1: #4e4a40;
+  --text-2: #847d6e;
+  --text-3: #a89f8c;
+  --diff-add-bg: rgba(58,150,96,.16);
+  --diff-add-fg: #2c7a4d;
+  --diff-del-bg: rgba(190,70,70,.13);
+  --diff-del-fg: #b14a4a;
+  --shadow: 0 12px 40px rgba(60,50,30,.16);
+  --on-air: #d2483f;
+  --c-role: #b56b95;
+  --c-outline: #4f7bb5;
+  --c-world: #3f8a64;
+}

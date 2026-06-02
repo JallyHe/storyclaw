@@ -1,0 +1,19 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "electron/**/*",
+    "electron.vite.config.*",
+    "src/types/**/*",
+    "src/editors/screenplay/importer.ts",
+    "src/editors/screenplay/markup.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "out/main",
+    "paths": {
+      "@main/*": ["./electron/*"]
+    },
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  }
+}

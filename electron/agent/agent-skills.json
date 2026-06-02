@@ -1,0 +1,122 @@
+{
+  "concept-planner": [
+    "story-architecture-analyzer",
+    "genre-classification",
+    "target-audience",
+    "audience-insight",
+    "social-insight"
+  ],
+  "market-analyst": [
+    "target-audience",
+    "audience-insight",
+    "social-insight",
+    "genre-classification",
+    "competitive-analysis",
+    "commercial-hook"
+  ],
+  "ip-developer": [
+    "ip-extensibility",
+    "franchise-design",
+    "audience-insight"
+  ],
+  "research-analyst": [
+    "story-architecture-analyzer",
+    "source-verification",
+    "reference-synthesis"
+  ],
+  "worldbuilder": [
+    "setting-rules",
+    "worldview-consistency",
+    "hole-before-fill"
+  ],
+  "character-designer": [
+    "character-situation",
+    "character-reinforcement",
+    "hard-choices",
+    "information-positioning",
+    "avatar-character",
+    "companion-character",
+    "reward-character",
+    "plot-trigger-character",
+    "character-relationship-map",
+    "voice-differentiation"
+  ],
+  "story-architect": [
+    "duration-rules",
+    "story-situation",
+    "story-arc",
+    "situation-is-king",
+    "cyclical-plot",
+    "situation-building-plot",
+    "terminal-plot",
+    "situation-plot-conversion",
+    "pressure-escalation",
+    "hole-before-fill",
+    "reverse-thinking"
+  ],
+  "episode-outliner": [
+    "duration-rules",
+    "cyclical-plot",
+    "situation-building-plot",
+    "terminal-plot",
+    "situation-plot-conversion",
+    "amplify-interesting",
+    "hole-before-fill",
+    "reverse-thinking",
+    "pressure-escalation"
+  ],
+  "scene-writer": [
+    "duration-rules",
+    "situation-is-king",
+    "situation-plot-conversion",
+    "pressure-escalation",
+    "hole-before-fill",
+    "character-situation",
+    "character-reinforcement",
+    "hard-choices",
+    "information-positioning",
+    "blame-shift-credit",
+    "voice-differentiation"
+  ],
+  "dialogue-polisher": [
+    "voice-differentiation",
+    "subtext-first",
+    "meta-commentary",
+    "conflict-is-drama",
+    "information-release",
+    "qa-role-reversal",
+    "callback-echo",
+    "face-slap",
+    "tension-break",
+    "action-catalyzing",
+    "rhythm-control",
+    "trim-redundancy"
+  ],
+  "chief-editor": [
+    "editorial-standard",
+    "readability-review",
+    "situation-is-king",
+    "trim-redundancy"
+  ],
+  "logic-checker": [
+    "hole-before-fill",
+    "causal-chain-check",
+    "continuity-check",
+    "information-positioning"
+  ],
+  "drama-reviewer": [
+    "conflict-is-drama",
+    "situation-is-king",
+    "pressure-escalation",
+    "stakes-audit",
+    "hard-choices"
+  ],
+  "compliance-reviewer": [
+    "content-compliance",
+    "sensitive-risk-flagging"
+  ],
+  "feasibility-analyst": [
+    "production-cost",
+    "shootability"
+  ]
+}

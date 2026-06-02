@@ -1,0 +1,147 @@
+.pm-editor-main { min-width: 0; display: flex; flex-direction: column; background: transparent; min-height: 0; }
+.screenplay-main { min-height: 100%; }
+.pm-line-tools { display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.screenplay-tabs { justify-content: flex-start; }
+.pm-tool { border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); border-radius: 6px; padding: 4px 9px; font-size: 12px; }
+.pm-tool:hover { border-color: var(--accent); color: var(--text-0); }
+.pm-tool.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.pm-format-btn { height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 12px; transition: all .14s; }
+.pm-format-btn:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); color: var(--text-0); }
+.pm-format-btn.active { background: color-mix(in srgb, var(--accent) 18%, var(--bg-2)); border-color: color-mix(in srgb, var(--accent) 70%, var(--border)); color: var(--text-0); }
+.pm-episode-select { height: 30px; max-width: 180px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); padding: 0 9px; font-size: 12px; outline: none; }
+.pm-episode-select:focus { border-color: color-mix(in srgb, var(--accent) 70%, var(--border)); }
+.pm-spacer { flex: 1; }
+.pm-stat { white-space: nowrap; color: var(--text-3); }
+.pm-type-indicator { color: var(--accent); font-weight: 700; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); white-space: nowrap; }
+.pm-tool-input { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12px; }
+.pm-tool-input select, .pm-tool-input input { height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); padding: 0 9px; }
+.pm-tool-input.color input { width: 34px; padding: 2px; }
+.pm-screenplay-scroll { flex: 1; overflow: visible; padding: 0; display: flex; justify-content: center; background: transparent; scroll-behavior: smooth; }
+.pm-paper { width: 820px; min-width: 820px; position: relative; background: var(--paper); color: var(--ink); border: 1px solid color-mix(in srgb, var(--paper) 65%, var(--border-soft)); border-radius: 4px; box-shadow: 0 5px 20px rgba(0,0,0,.36), 0 22px 70px rgba(0,0,0,.28); overflow: visible; }
+.pm-inline-menu { position: absolute; z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 148px; background: #f8f5ee; border: 1px solid rgba(0,0,0,.08); border-radius: 10px; box-shadow: 0 16px 28px rgba(0,0,0,.18); padding: 8px; }
+.pm-inline-item { display: inline-flex; align-items: center; gap: 8px; border: none; background: transparent; border-radius: 8px; color: #2b2b2b; padding: 8px 10px; font-size: 12px; text-align: left; cursor: pointer; }
+.pm-inline-item:hover, .pm-inline-item.active { background: rgba(0,152,255,.12); color: #111; }
+.pm-inline-item.active { outline: 1px solid rgba(0,152,255,.34); }
+.pm-page-title { position: absolute; top: 82px; left: 80px; right: 80px; display: grid; grid-template-columns: 96px minmax(0, 1fr) 96px; align-items: baseline; gap: 12px; text-align: center; color: var(--ink); font-family: var(--script-font); font-size: 30px; font-weight: 900; letter-spacing: -.01em; z-index: 3; }
+.pm-page-episode { display: inline-flex; justify-self: start; align-items: baseline; gap: 2px; color: color-mix(in srgb, var(--ink) 68%, transparent); font-family: "Noto Sans SC", sans-serif; font-size: 14px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.pm-page-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-page-title-side { display: block; }
+.pm-page-episode input { width: 2.4em; border: 0; border-bottom: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: center; outline: none; }
+.pm-page-title-input { width: min(100%, 520px); border: 0; border-bottom: 1px solid transparent; background: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; outline: none; }
+.pm-episode-delete { border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); background: transparent; color: color-mix(in srgb, var(--ink) 46%, transparent); border-radius: 6px; padding: 3px 7px; font-family: "Noto Sans SC", sans-serif; font-size: 11px; cursor: pointer; }
+.pm-episode-delete:hover { border-color: color-mix(in srgb, #c44 48%, transparent); color: #9b2d2d; }
+.pm-page-title input:focus { border-bottom-color: var(--accent); }
+.pm-page-title input[readonly] { pointer-events: none; }
+.pm-page-cover { position: absolute; left: 0; right: 0; height: 60px; background: var(--paper); z-index: 1; pointer-events: none; }
+.pm-page-cover.top { border-bottom: 1px solid var(--border-soft); }
+.pm-page-cover.bottom { display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--border-soft); }
+.pm-page-number { color: color-mix(in srgb, var(--ink) 42%, transparent); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .12em; }
+/* z-index: 1 — same level as page-cover but later in DOM, so it paints on top of the
+   bottom-cover's overlap region, revealing the gap background between pages. */
+.pm-page-gap { position: absolute; left: -1px; right: -1px; height: 20px; background: var(--bg-0); z-index: 1; pointer-events: none; box-shadow: inset 0 10px 12px -12px rgba(0,0,0,.55), inset 0 -10px 12px -12px rgba(0,0,0,.55); }
+.pm-screenplay { position: relative; z-index: 2; outline: none; padding: 82px 80px 200px; min-height: 1160px; font-family: var(--script-font); font-size: 16px; line-height: 1.82; white-space: pre-wrap; color: var(--ink); }
+.pm-screenplay.readonly { pointer-events: none; }
+.pm-page-flow-spacer { display: block; flex: none; pointer-events: none; }
+.pm-screenplay [data-type] { position: relative; }
+.pm-screenplay [data-type]::before { display: none; }
+.pm-sp-episode-heading { display: grid; grid-template-columns: 66px minmax(0, 1fr) 66px; align-items: baseline; gap: 12px; margin: 0 0 34px; color: var(--ink); font-family: var(--script-font); font-size: 30px; font-weight: 900; line-height: 1.35; text-align: center; }
+.pm-sp-episode-heading:not(:first-child) { margin-top: 92px; padding-top: 26px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.pm-sp-episode-label { justify-self: start; color: color-mix(in srgb, var(--ink) 68%, transparent); font-family: "Noto Sans SC", sans-serif; font-size: 14px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.pm-sp-episode-number { width: 2.2em; border: 0; border-bottom: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: center; outline: none; }
+.pm-sp-episode-number:focus { border-bottom-color: var(--accent); }
+.pm-sp-episode-title { min-width: 0; outline: none; }
+.pm-sp-episode-side { display: block; }
+.pm-sp-scene { margin: 30px 0 12px; padding: 5px 10px; border-left: 3px solid var(--accent); border-bottom: 0; border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--accent) 13%, transparent); font-family: "Noto Sans SC", sans-serif; font-size: 13px; font-weight: 800; letter-spacing: .06em; color: var(--accent); }
+.pm-sp-scene:first-child { margin-top: 0; }
+.pm-sp-action { margin: 7px 0; color: var(--ink); }
+.pm-sp-character { margin: 7px 0; font-weight: 800; letter-spacing: .07em; color: var(--ink); }
+.pm-sp-dialogue { margin: 7px 0; color: var(--ink); line-height: 1.82; }
+.pm-speech-speaker { font-weight: 850; letter-spacing: .03em; display: inline; }
+.pm-speech-paren { color: color-mix(in srgb, var(--ink) 62%, transparent); font-size: .96em; font-style: italic; }
+.pm-speech-colon { font-weight: 700; }
+.pm-sp-paren { margin: 7px 0; color: color-mix(in srgb, var(--ink) 68%, transparent); font-style: italic; font-size: .95em; }
+.pm-sp-transition { margin: 18px 0 10px; text-align: right; color: color-mix(in srgb, var(--ink) 65%, transparent); font-weight: 600; font-size: 13px; letter-spacing: .08em; }
+.pm-screenplay ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+/* ── Document Editor Shell ─────────────────────────────────────────── */
+.doc-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg-0); }
+
+/* Toolbar */
+.doc-shell-toolbar { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 16px; border-bottom: 1px solid var(--border-soft); background: color-mix(in srgb, var(--bg-1) 94%, #11131b); min-height: 46px; }
+.doc-shell-tools { display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap; }
+.doc-shell-file-name { font-size: 13px; font-weight: 600; color: var(--text-1); padding: 0 4px; }
+.doc-outline-toggle { width: 30px; height: 30px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-3); display: grid; place-items: center; flex: none; transition: all .12s; }
+.doc-outline-toggle:hover { background: var(--bg-2); color: var(--text-1); border-color: var(--border); }
+.doc-outline-toggle.on { background: color-mix(in srgb, var(--accent) 14%, var(--bg-2)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+
+/* Body = outline panel + canvas */
+.doc-shell-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+/* Outline panel — always in DOM, animates open ↔ closed via width */
+.doc-outline-panel {
+  flex: none;
+  width: 200px;
+  border-right: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Smooth collapse: transition width so the canvas reflows gradually
+     instead of snapping, which would repaint the editor and cause flicker. */
+  transition: width 0.18s ease, border-right-color 0.18s ease;
+}
+.doc-outline-panel.collapsed {
+  width: 0;
+  border-right-color: transparent;
+}
+.doc-outline-head { flex: none; padding: 9px 12px 7px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--border-soft); }
+.doc-outline-list { flex: 1; overflow-y: auto; padding: 6px 0 12px; }
+.doc-outline-item { width: 100%; display: flex; align-items: center; gap: 6px; padding: 5px 12px; background: none; border: none; text-align: left; cursor: pointer; color: var(--text-2); font-size: 12px; line-height: 1.45; transition: background .1s; white-space: nowrap; }
+.doc-outline-item:hover { background: var(--bg-2); color: var(--text-0); }
+.doi-sub-mark { flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--text-3); opacity: .7; }
+.doi-caret { flex: none; width: 12px; color: var(--text-3); font-size: 10px; line-height: 1; transform: rotate(0deg); transition: transform .12s; }
+.doi-caret.collapsed { transform: rotate(-90deg); }
+.doi-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+/* Canvas (scroll area + zoom) */
+.doc-shell-canvas { flex: 1; overflow: auto; min-height: 0; min-width: 0; }
+.doc-shell-canvas-inner {
+  zoom: var(--doc-zoom, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 36px 28px 80px;
+  min-height: 100%;
+  /* Ensures the inner is always wide enough for the paper so it never
+     bleeds leftward under the outline panel when the canvas is narrowed. */
+  min-width: max-content;
+}
+
+/* A4 paper */
+.doc-paper { width: 820px; min-width: 820px; min-height: 1122px; background: var(--paper); color: var(--ink); border: 1px solid color-mix(in srgb, var(--paper) 50%, #000); border-radius: 3px; box-shadow: 0 4px 18px rgba(0,0,0,.38), 0 18px 60px rgba(0,0,0,.30); }
+.doc-paper.outline-paper { padding: 48px 56px 64px; }
+
+/* Status / zoom bar */
+.doc-shell-statusbar { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 30px; border-top: 1px solid var(--border-soft); background: var(--bg-1); font-size: 11.5px; color: var(--text-3); }
+.doc-status-left { display: flex; align-items: center; gap: 12px; }
+.doc-status-stat { color: var(--text-3); }
+.doc-zoom-row { display: flex; align-items: center; gap: 6px; }
+.doc-zoom-btn { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); font-size: 13px; display: grid; place-items: center; line-height: 1; transition: all .1s; }
+.doc-zoom-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.doc-zoom-btn:disabled { opacity: .35; cursor: not-allowed; }
+.doc-zoom-val { min-width: 38px; text-align: center; cursor: pointer; color: var(--text-2); font-size: 11.5px; }
+.doc-zoom-val:hover { color: var(--text-0); }
+
+.pm-readonly-badge { font-size: 11px; color: var(--text-3); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
+
+/* Rich text editor (plain mount — toolbar is in shell header) */
+.rich-editor-mount { min-height: 800px; padding: 0; color: var(--ink); line-height: 1.85; outline: none; font-size: 15px; }
+.rich-editor-mount .ProseMirror { outline: none; min-height: inherit; }
+.rich-editor-mount h1, .rich-editor-mount h2, .rich-editor-mount h3 { color: var(--ink); margin: 10px 0 6px; }
+.rich-editor-mount h1 { font-size: 22px; }
+.rich-editor-mount h2 { font-size: 17px; }
+.rich-editor-mount h3 { font-size: 14px; }
+.rich-editor-mount p { margin: 6px 0; }
+.rich-editor-mount li { margin: 4px 0 4px 18px; }
+.rich-editor-mount table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+.rich-editor-mount th, .rich-editor-mount td { border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent); padding: 6px 12px; font-size: 14px; text-align: left; }
+.rich-editor-mount th { background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }

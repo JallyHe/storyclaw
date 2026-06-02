@@ -1,0 +1,220 @@
+/* ── Reference Viewer ─────────────────────────────────────────────── */
+
+.ref-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-0);
+}
+
+.ref-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+  flex-shrink: 0;
+}
+
+.ref-filename {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* ── Text ─────────────────────────────────────────────────────────── */
+
+.ref-text {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-1);
+  background: var(--bg-0);
+}
+
+/* ── PDF ──────────────────────────────────────────────────────────── */
+
+.ref-pdf {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ref-pdf-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.ref-pdf-controls input[type="number"] {
+  width: 48px;
+  padding: 2px 4px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-0);
+  color: var(--text-1);
+}
+
+.ref-pdf-controls button {
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-0);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.ref-pdf-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ref-pdf-controls button:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.ref-pdf-pages {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 16px 28px;
+  background: var(--bg-0);
+}
+
+.ref-pdf-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin: 0 auto 18px;
+}
+
+.ref-pdf-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  box-shadow: 0 2px 18px rgba(0, 0, 0, 0.2);
+}
+
+.ref-pdf-page-label {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── DOCX ─────────────────────────────────────────────────────────── */
+
+.ref-docx {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 32px;
+  background: var(--bg-0);
+}
+
+.docx-preview-content {
+  margin: 0 auto;
+}
+
+.docx-preview-content .docx-wrapper {
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.docx-preview-content section.docx {
+  margin: 0 auto 18px !important;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 2px 18px rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  position: relative;
+}
+
+.docx-preview-content section.docx::after {
+  content: attr(data-page);
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  font: 11px/1.2 system-ui, sans-serif;
+  color: rgba(0,0,0,.38);
+}
+
+.ref-docx-fallback {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 38px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+/* ── Loading / Error ──────────────────────────────────────────────── */
+
+.ref-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.ref-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--diff-del-fg);
+}
+
+.ref-error p {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ref-error pre {
+  font-size: 12px;
+  color: var(--text-2);
+  max-width: 100%;
+  overflow: auto;
+  padding: 8px 16px;
+  background: var(--bg-1);
+  border-radius: 4px;
+}
