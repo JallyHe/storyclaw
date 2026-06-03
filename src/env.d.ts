@@ -63,12 +63,12 @@ interface Window {
         send(sessionId: string, text: string, mode: string, permission: string, modelId?: string): Promise<void>
         permissionRespond(requestId: string, approved: boolean): void
         stop(sessionId: string): Promise<void>
-        getConfig(workspaceRoot: string): Promise<AgentConfigSnapshot>
-        saveConfig(workspaceRoot: string, config: AgentConfigSnapshot): Promise<AgentConfigSnapshot>
-        listModels(workspaceRoot: string): Promise<AgentModelOption[]>
+        getConfig(): Promise<AgentConfigSnapshot>
+        saveConfig(config: AgentConfigSnapshot): Promise<AgentConfigSnapshot>
+        listModels(): Promise<AgentModelOption[]>
         listResources(): Promise<AgentResources>
         setModel(modelId: string): Promise<void>
-        testModel(workspaceRoot: string, modelId?: string): Promise<AgentConnectionTestResult>
+        testModel(modelId?: string): Promise<AgentConnectionTestResult>
         loadSnapshot(workspaceRoot: string): Promise<AgentSnapshot>
         saveSnapshot(workspaceRoot: string, snapshot: AgentSnapshot): Promise<void>
         onEvent(cb: (e: AgentEvent) => void): () => void

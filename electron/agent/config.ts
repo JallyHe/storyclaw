@@ -29,9 +29,9 @@ function globalAgentDir(): string {
  *  - global config  (model list, API keys, Pi model registry)
  *  - project-level  (Pi Agent session data — stays per-workspace)
  */
-export function getAgentConfigPaths(workspaceRoot: string) {
+export function getAgentConfigPaths(workspaceRoot = '') {
   const globalDir = globalAgentDir()
-  const projectAgentDir = path.join(workspaceRoot, '.storyclaw', 'pi-agent')
+  const projectAgentDir = workspaceRoot ? path.join(workspaceRoot, '.storyclaw', 'pi-agent') : globalDir
   return {
     // ── Global (shared across all projects) ──────────────────
     globalDir,
@@ -43,8 +43,8 @@ export function getAgentConfigPaths(workspaceRoot: string) {
   }
 }
 
-export async function loadAgentConfig(_workspaceRoot: string): Promise<AgentConfigSnapshot> {
-  const paths = getAgentConfigPaths(_workspaceRoot)
+export async function loadAgentConfig(): Promise<AgentConfigSnapshot> {
+  const paths = getAgentConfigPaths()
   try {
     const raw = await fs.readFile(paths.configJson, 'utf8')
     return normalizeConfig(JSON.parse(raw))
@@ -56,11 +56,10 @@ export async function loadAgentConfig(_workspaceRoot: string): Promise<AgentConf
 }
 
 export async function saveAgentConfig(
-  _workspaceRoot: string,
   config: AgentConfigSnapshot
 ): Promise<AgentConfigSnapshot> {
   const normalized = normalizeConfig(config)
-  const paths = getAgentConfigPaths(_workspaceRoot)
+  const paths = getAgentConfigPaths()
   // Global dirs for model config
   await fs.mkdir(paths.globalDir, { recursive: true })
   await fs.writeFile(paths.configJson, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')
@@ -68,8 +67,8 @@ export async function saveAgentConfig(
   return normalized
 }
 
-export async function listConfiguredAgentModels(workspaceRoot: string): Promise<AgentModelOption[]> {
-  const config = await loadAgentConfig(workspaceRoot)
+export async function listConfiguredAgentModels(): Promise<AgentModelOption[]> {
+  const config = await loadAgentConfig()
   return config.models.map(model => ({
     id: model.id,
     label: model.displayName,
@@ -86,7 +85,7 @@ export async function applyAgentModelConfig(
   workspaceRoot: string,
   modelId?: string
 ): Promise<ReturnType<ModelRegistry['find']>> {
-  const config = await loadAgentConfig(workspaceRoot)
+  const config = await loadAgentConfig()
   const selected = pickModel(config, modelId)
   if (!selected) return undefined
 
@@ -100,14 +99,13 @@ export async function applyAgentModelConfig(
 }
 
 export async function testAgentModel(
-  workspaceRoot: string,
   modelId?: string
 ): Promise<AgentConnectionTestResult> {
-  const config = await loadAgentConfig(workspaceRoot)
+  const config = await loadAgentConfig()
   const selected = pickModel(config, modelId)
   if (!selected) return { ok: false, message: '没有可用模型，请先启用一个模型配置。' }
 
-  const paths = getAgentConfigPaths(workspaceRoot)
+  const paths = getAgentConfigPaths()
   await writePiModelsJson(paths.modelsJson, config.models)
   const authStorage = AuthStorage.create(paths.authJson)
   installRuntimeApiKeys(authStorage, config.models)
@@ -141,7 +139,7 @@ export async function prepareAgentModelRuntime(
   workspaceRoot: string,
   modelId?: string
 ): Promise<PreparedAgentModelRuntime> {
-  const config = await loadAgentConfig(workspaceRoot)
+  const config = await loadAgentConfig()
   const selected = pickModel(config, modelId)
   const paths = getAgentConfigPaths(workspaceRoot)
   await writePiModelsJson(paths.modelsJson, config.models)

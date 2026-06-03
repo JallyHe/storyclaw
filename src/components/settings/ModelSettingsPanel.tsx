@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AgentConfigSnapshot, AgentModelConfig, AgentModelOption } from '@/types'
 import { agentIpc } from '@/ipc/agent'
-import { useWorkspaceStore } from '@/store'
 import { Ic } from '@/components/icons'
 import {
   PROVIDER_TEMPLATES,
@@ -11,7 +10,6 @@ import {
 } from './modelCatalog'
 
 export function ModelSettingsPanel() {
-  const root = useWorkspaceStore(s => s.root)
   const [config, setConfig] = useState<AgentConfigSnapshot | null>(null)
   const [options, setOptions] = useState<AgentModelOption[]>([])
   const [draft, setDraft] = useState<AgentModelConfig | null>(null)
@@ -19,24 +17,14 @@ export function ModelSettingsPanel() {
   const [showKey, setShowKey] = useState(false)
   const [status, setStatus] = useState('')
 
-  const reload = useCallback((workspaceRoot: string) => {
-    void agentIpc.getConfig(workspaceRoot).then(setConfig).catch(() => {})
-    void agentIpc.listModels(workspaceRoot).then(setOptions).catch(() => {})
+  const reload = useCallback(() => {
+    void agentIpc.getConfig().then(setConfig).catch(() => {})
+    void agentIpc.listModels().then(setOptions).catch(() => {})
   }, [])
 
   useEffect(() => {
-    if (!root) { setConfig(null); setOptions([]); return }
-    reload(root)
-  }, [root, reload])
-
-  if (!root) {
-    return (
-      <div className="set-empty">
-        <Ic.shield width={20} height={20} />
-        <p>请先打开一个项目工作区，再配置 Agent 模型。</p>
-      </div>
-    )
-  }
+    reload()
+  }, [reload])
 
   const models = config?.models ?? []
   const activeId = config?.activeModelId ?? ''
@@ -73,9 +61,9 @@ export function ModelSettingsPanel() {
   const patch = (p: Partial<AgentModelConfig>) => setDraft(cur => cur ? { ...cur, ...p } : cur)
 
   const persist = async (next: AgentConfigSnapshot) => {
-    const saved = await agentIpc.saveConfig(root, next)
+    const saved = await agentIpc.saveConfig(next)
     setConfig(saved)
-    void agentIpc.listModels(root).then(setOptions).catch(() => {})
+    void agentIpc.listModels().then(setOptions).catch(() => {})
     return saved
   }
 
@@ -109,7 +97,7 @@ export function ModelSettingsPanel() {
     const exists = models.some(m => m.id === draft.id)
     const nextModels = exists ? models.map(m => m.id === draft.id ? draft : m) : [...models, draft]
     await persist({ version: 1, activeModelId: draft.id, models: nextModels })
-    const result = await agentIpc.testModel(root, draft.id)
+    const result = await agentIpc.testModel(draft.id)
     setStatus(result.message)
   }
 

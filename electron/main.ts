@@ -27,7 +27,7 @@ import {
 } from './fs/workspace'
 import { exportScreenplayFile } from './fs/export'
 import type { NewProjectOptions, SearchOptions } from '../src/types'
-import { setAgentModel, startAgentSession, sendPrompt, stopAgent } from './agent/session'
+import { getWorkspaceRoot, setAgentModel, startAgentSession, sendPrompt, stopAgent } from './agent/session'
 import { loadAgentSnapshot, saveAgentSnapshot } from './agent/persistence'
 import { listAgentResources } from './agent/skills'
 import {
@@ -433,22 +433,25 @@ ipcMain.handle('agent:stop', async (_e, sessionId: string) => {
   win?.webContents.send('agent:event', { sessionId, type: 'agent_end' })
 })
 
-ipcMain.handle('agent:getConfig', async (_e, workspaceRoot: string) => {
-  return loadAgentConfig(workspaceRoot)
+ipcMain.handle('agent:getConfig', async () => {
+  return loadAgentConfig()
 })
 
-ipcMain.handle('agent:saveConfig', async (_e, workspaceRoot: string, config) => {
-  const saved = await saveAgentConfig(workspaceRoot, config)
+ipcMain.handle('agent:saveConfig', async (_e, config) => {
+  const saved = await saveAgentConfig(config)
   // Restart the session so the new AuthStorage picks up the updated API keys.
   // setAgentModel() alone cannot update auth on a live session.
-  startAgentSession(workspaceRoot, win!).catch(err => {
-    console.error('[Agent] Failed to restart session after config save:', err.message)
-  })
+  const workspaceRoot = getWorkspaceRoot()
+  if (workspaceRoot && win) {
+    startAgentSession(workspaceRoot, win).catch(err => {
+      console.error('[Agent] Failed to restart session after config save:', err.message)
+    })
+  }
   return saved
 })
 
-ipcMain.handle('agent:listModels', async (_e, workspaceRoot: string) => {
-  return listConfiguredAgentModels(workspaceRoot)
+ipcMain.handle('agent:listModels', async () => {
+  return listConfiguredAgentModels()
 })
 
 ipcMain.handle('agent:listResources', async () => {
@@ -459,8 +462,8 @@ ipcMain.handle('agent:setModel', async (_e, modelId: string) => {
   await setAgentModel(modelId)
 })
 
-ipcMain.handle('agent:testModel', async (_e, workspaceRoot: string, modelId?: string) => {
-  return testAgentModel(workspaceRoot, modelId)
+ipcMain.handle('agent:testModel', async (_e, modelId?: string) => {
+  return testAgentModel(modelId)
 })
 
 ipcMain.handle('agent:loadSnapshot', async (_e, workspaceRoot: string) => {

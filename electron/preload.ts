@@ -93,18 +93,18 @@ const api = {
     permissionRespond: (requestId: string, approved: boolean): void =>
       ipcRenderer.send('agent:permission-response', requestId, approved),
     stop:   (sessionId: string): Promise<void>               => ipcRenderer.invoke('agent:stop', sessionId),
-    getConfig: (workspaceRoot: string): Promise<AgentConfigSnapshot> =>
-      ipcRenderer.invoke('agent:getConfig', workspaceRoot),
-    saveConfig: (workspaceRoot: string, config: AgentConfigSnapshot): Promise<AgentConfigSnapshot> =>
-      ipcRenderer.invoke('agent:saveConfig', workspaceRoot, config),
-    listModels: (workspaceRoot: string): Promise<AgentModelOption[]> =>
-      ipcRenderer.invoke('agent:listModels', workspaceRoot),
+    getConfig: (): Promise<AgentConfigSnapshot> =>
+      ipcRenderer.invoke('agent:getConfig'),
+    saveConfig: (config: AgentConfigSnapshot): Promise<AgentConfigSnapshot> =>
+      ipcRenderer.invoke('agent:saveConfig', config),
+    listModels: (): Promise<AgentModelOption[]> =>
+      ipcRenderer.invoke('agent:listModels'),
     listResources: (): Promise<AgentResources> =>
       ipcRenderer.invoke('agent:listResources'),
     setModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('agent:setModel', modelId),
-    testModel: (workspaceRoot: string, modelId?: string): Promise<AgentConnectionTestResult> =>
-      ipcRenderer.invoke('agent:testModel', workspaceRoot, modelId),
+    testModel: (modelId?: string): Promise<AgentConnectionTestResult> =>
+      ipcRenderer.invoke('agent:testModel', modelId),
     loadSnapshot: (workspaceRoot: string): Promise<AgentSnapshot> =>
       ipcRenderer.invoke('agent:loadSnapshot', workspaceRoot),
     saveSnapshot: (workspaceRoot: string, snapshot: AgentSnapshot): Promise<void> =>

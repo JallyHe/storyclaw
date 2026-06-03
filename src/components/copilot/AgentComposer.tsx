@@ -238,8 +238,8 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const curModel = agentConfig?.models.find(item => item.id === model)
   const curPerm = AGENT_PERMISSIONS.find(item => item.id === permission) ?? AGENT_PERMISSIONS[0]
   const hasSelectedModel = Boolean(curModelOption && curModel)
-  const isConfigured = !root || Boolean(curModelOption?.configured)
-  const modelWarning = root ? getConfigMessage(curModelOption) : ''
+  const isConfigured = Boolean(curModelOption?.configured)
+  const modelWarning = getConfigMessage(curModelOption)
   const pickEntries = useMemo<PickEntry[]>(() => {
     const toEntry = (kind: 'agent' | 'skill') => (r: { name: string; title: string; description: string; category?: string }): PickEntry => ({
       id: `${kind}:${r.name}`,
@@ -288,25 +288,19 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const slashGroups = useMemo(() => groupPickEntries(slashSkills), [slashSkills])
   const triggerItems = trigger?.kind === 'slash' ? slashSkills : mentionNodes
 
-  const reloadModels = useCallback((workspaceRoot: string) => {
-    void agentIpc.getConfig(workspaceRoot).then(config => {
+  const reloadModels = useCallback(() => {
+    void agentIpc.getConfig().then(config => {
       setAgentConfig(config)
       setModel(config.activeModelId)
       const activeModel = config.models.find(item => item.id === config.activeModelId)
       if (activeModel) setMode(activeModel.defaultMode)
     }).catch(() => {})
-    void agentIpc.listModels(workspaceRoot).then(setModelList).catch(() => {})
+    void agentIpc.listModels().then(setModelList).catch(() => {})
   }, [])
 
   useEffect(() => {
-    if (!root) {
-      setAgentConfig(null)
-      setModelList([])
-      setModel('')
-      return
-    }
-    reloadModels(root)
-  }, [root, reloadModels])
+    reloadModels()
+  }, [reloadModels])
 
   useEffect(() => {
     void agentIpc.listResources().then(setResources).catch(() => {})
@@ -655,17 +649,17 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const chooseModel = async (modelId: string) => {
     setModel(modelId)
     setPop(null)
-    if (!root || !agentConfig) return
-    const saved = await agentIpc.saveConfig(root, { ...agentConfig, activeModelId: modelId })
+    if (!agentConfig) return
+    const saved = await agentIpc.saveConfig({ ...agentConfig, activeModelId: modelId })
     setAgentConfig(saved)
     const activeModel = saved.models.find(item => item.id === modelId)
     if (activeModel) setMode(activeModel.defaultMode)
-    reloadModels(root)
+    reloadModels()
   }
 
   return (
     <div className={`acomposer${big ? ' big' : ''}`}>
-      {root && modelWarning && (
+      {modelWarning && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -936,8 +930,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
           )}
         >
           <div className="ac-pop-title">模型</div>
-          {!root && <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-3)' }}>打开工作区后可配置 Agent 模型。</div>}
-          {modelList.length === 0 && root && (
+          {modelList.length === 0 && (
             <div className="ac-model-empty">
               <div className="ac-model-empty-title">还没有配置任何模型</div>
               <div className="ac-model-empty-desc">先选择供应商，再一次添加多个模型；默认入口是自定义 OpenAI 接口。</div>

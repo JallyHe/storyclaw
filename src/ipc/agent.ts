@@ -14,18 +14,18 @@ export const agentIpc = {
   permissionRespond: (requestId: string, approved: boolean): void =>
     getOptionalApi()?.agent.permissionRespond(requestId, approved),
   stop:    (sessionId: string): Promise<void>          => getApi().agent.stop(sessionId),
-  getConfig: (workspaceRoot: string): Promise<AgentConfigSnapshot> =>
-    getOptionalApi()?.agent.getConfig(workspaceRoot) ?? rejectMissingApi(),
-  saveConfig: (workspaceRoot: string, config: AgentConfigSnapshot): Promise<AgentConfigSnapshot> =>
-    getOptionalApi()?.agent.saveConfig(workspaceRoot, config) ?? rejectMissingApi(),
-  listModels: (workspaceRoot: string): Promise<AgentModelOption[]> =>
-    getOptionalApi()?.agent.listModels(workspaceRoot) ?? rejectMissingApi(),
+  getConfig: (): Promise<AgentConfigSnapshot> =>
+    getOptionalApi()?.agent.getConfig() ?? rejectMissingApi(),
+  saveConfig: (config: AgentConfigSnapshot): Promise<AgentConfigSnapshot> =>
+    getOptionalApi()?.agent.saveConfig(config) ?? rejectMissingApi(),
+  listModels: (): Promise<AgentModelOption[]> =>
+    getOptionalApi()?.agent.listModels() ?? rejectMissingApi(),
   listResources: (): Promise<AgentResources> =>
     getOptionalApi()?.agent.listResources() ?? rejectMissingApi(),
   setModel: (modelId: string): Promise<void> =>
     getOptionalApi()?.agent.setModel(modelId) ?? rejectMissingApi(),
-  testModel: (workspaceRoot: string, modelId?: string): Promise<AgentConnectionTestResult> =>
-    getOptionalApi()?.agent.testModel(workspaceRoot, modelId) ?? rejectMissingApi(),
+  testModel: (modelId?: string): Promise<AgentConnectionTestResult> =>
+    getOptionalApi()?.agent.testModel(modelId) ?? rejectMissingApi(),
   loadSnapshot: (workspaceRoot: string): Promise<AgentSnapshot> =>
     getOptionalApi()?.agent.loadSnapshot(workspaceRoot) ?? rejectMissingApi(),
   saveSnapshot: (workspaceRoot: string, snapshot: AgentSnapshot): Promise<void> =>

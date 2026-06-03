@@ -94,7 +94,7 @@ export class StoryClawAgentRuntime {
     const agentDir = path.join(workspaceRoot, '.storyclaw', 'pi-agent')
     const sessionDir = path.join(agentDir, 'sessions')
     await fs.mkdir(sessionDir, { recursive: true })
-    const config = await loadAgentConfig(workspaceRoot)
+    const config = await loadAgentConfig()
     this.activeModelId = config.activeModelId
 
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({
@@ -233,9 +233,9 @@ export class StoryClawAgentRuntime {
 
   async setModel(modelId: string): Promise<void> {
     if (!this.workspaceRoot) throw new Error('Agent workspace is not initialized')
-    const config = await loadAgentConfig(this.workspaceRoot)
+    const config = await loadAgentConfig()
     const nextConfig = { ...config, activeModelId: modelId }
-    await saveAgentConfig(this.workspaceRoot, nextConfig)
+    await saveAgentConfig(nextConfig)
     this.activeModelId = modelId
 
     if (!this.runtime) return
