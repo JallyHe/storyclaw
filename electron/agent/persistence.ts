@@ -3,20 +3,36 @@ import path from 'path'
 import type { AgentMode, AgentSnapshot, Session } from '../../src/types'
 export type { AgentSnapshot } from '../../src/types'
 
-const DEFAULT_SESSION: Session = {
-  id: 's_new',
-  title: '新会话',
-  group: '进行中',
-  time: '刚刚',
-  messages: []
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function normalizeTimestamp(value: string | undefined, fallback = nowIso()): string {
+  if (!value) return fallback
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? new Date(time).toISOString() : fallback
+}
+
+function createDefaultSession(): Session {
+  const now = nowIso()
+  return {
+    id: 's_new',
+    title: '新会话',
+    group: '进行中',
+    time: now,
+    createdAt: now,
+    updatedAt: now,
+    messages: []
+  }
 }
 
 export function createDefaultAgentSnapshot(): AgentSnapshot {
+  const session = createDefaultSession()
   return {
     version: 1,
-    activeSessionId: DEFAULT_SESSION.id,
-    modeBySessionId: { [DEFAULT_SESSION.id]: 'craft' },
-    sessions: [DEFAULT_SESSION],
+    activeSessionId: session.id,
+    modeBySessionId: { [session.id]: 'craft' },
+    sessions: [session],
     pendingChanges: []
   }
 }
@@ -63,8 +79,13 @@ function normalizeSnapshot(input: Partial<AgentSnapshot>): AgentSnapshot {
 }
 
 function normalizeSession(session: Session): Session {
+  const createdAt = normalizeTimestamp(session.createdAt ?? session.time)
+  const updatedAt = normalizeTimestamp(session.updatedAt ?? session.time, createdAt)
   return {
     ...session,
+    time: updatedAt,
+    createdAt,
+    updatedAt,
     archived: Boolean(session.archived),
     titleEdited: Boolean(session.titleEdited),
     messages: session.messages.map(message => {

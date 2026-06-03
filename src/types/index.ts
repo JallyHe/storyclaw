@@ -112,7 +112,10 @@ export interface Session {
   id: string
   title: string
   group: string
+  /** ISO timestamp for backward-compatible persistence; display text is derived at render time. */
   time: string
+  createdAt?: string
+  updatedAt?: string
   messages: Message[]
   archived?: boolean
   titleEdited?: boolean

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from
 import { useSessionsStore } from '@/store'
 import { Ic } from '@/components/icons'
 import type { Session } from '@/types'
+import { formatSessionRelativeTime } from '@/store/sessionMetadata'
 
 interface Props { width: number }
 
@@ -71,7 +72,7 @@ function SessionRow({ session, active, running, editing, editValue, onEditValue,
             {session.title}
           </div>
         )}
-        <div className="session-meta">{session.time}</div>
+        <div className="session-meta">{formatSessionRelativeTime(session)}</div>
       </div>
     </div>
   )

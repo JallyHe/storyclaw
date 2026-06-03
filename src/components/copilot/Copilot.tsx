@@ -1,10 +1,11 @@
 import { useRef, useEffect, useState } from 'react'
-import { useSessionsStore } from '@/store'
+import { useCopilotDraftStore, useSessionsStore } from '@/store'
 import { useAgentEvents } from '@/hooks/useAgentEvents'
 import { Message } from './Message'
 import { AgentComposer, type AgentComposerHandle } from './AgentComposer'
 import { PermissionDialog } from '@/components/agent/PermissionDialog'
 import { Ic } from '@/components/icons'
+import { countSessionMessages, formatSessionRelativeTime } from '@/store/sessionMetadata'
 
 const QUICK_ACTIONS = [
   { id: 'continue',    label: '续写本场',    icon: Ic.feather, prompt: '请续写当前剧本场景，保持人物语气和既有情节连贯。' },
@@ -21,6 +22,7 @@ export function Copilot({ width }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<AgentComposerHandle>(null)
   const { sessions, activeId, setActive, newSession, visibleSessions } = useSessionsStore()
+  const queuedSelection = useCopilotDraftStore(s => s.queuedSelection)
   const [chatOpen, setChatOpen] = useState(false)
   const session = sessions.find(s => s.id === activeId)
   const visible = visibleSessions()
@@ -33,6 +35,10 @@ export function Copilot({ width }: Props) {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  useEffect(() => {
+    if (queuedSelection) setChatOpen(true)
+  }, [queuedSelection])
 
   const fillPrompt = (prompt: string) => {
     composerRef.current?.setText(prompt)
@@ -77,9 +83,7 @@ export function Copilot({ width }: Props) {
               <div className="cp-session-empty">暂无会话</div>
             ) : (
               visible.map(item => {
-                const additions = item.messages.reduce((count, message) =>
-                  count + (message.role === 'assistant' ? message.steps.length : 0), 0)
-                const deletions = item.messages.filter(message => message.role === 'user').length
+                const messageCount = countSessionMessages(item.messages)
                 return (
                   <button
                     key={item.id}
@@ -91,9 +95,8 @@ export function Copilot({ width }: Props) {
                     <span className="cp-session-row-main">
                       <span className="cp-session-row-title">{item.title}</span>
                       <span className="cp-session-row-meta">
-                        {additions > 0 && <b className="add">+{additions}</b>}
-                        {deletions > 0 && <b className="del">-{deletions}</b>}
-                        <span>{item.time}</span>
+                        <span>{formatSessionRelativeTime(item)}</span>
+                        {messageCount > 0 && <span>{messageCount} 条消息</span>}
                       </span>
                     </span>
                   </button>
@@ -134,7 +137,7 @@ export function Copilot({ width }: Props) {
             )}
           </div>
           <div className="cp-composer">
-            <AgentComposer ref={composerRef} busy={busy} />
+            <AgentComposer ref={composerRef} busy={busy} includeCurrentDocumentContext />
           </div>
         </>
       )}

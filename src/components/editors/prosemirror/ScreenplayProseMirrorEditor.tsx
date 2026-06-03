@@ -11,8 +11,10 @@ import { addEpisodeToFile } from '@/editors/screenplay/episodeCollection'
 import { episodeLabel } from '@/editors/screenplay/episodeMeta'
 import { screenplaySchema, SCREENPLAY_LABELS, type ScreenplayLineType } from '@/editors/screenplay/schema'
 import { DiffBar } from '@/components/editors/episode/DiffBar'
-import { useEditorViewCacheStore, useTabsStore } from '@/store'
+import { useCopilotDraftStore, useEditorViewCacheStore, useTabsStore, useUiStore, useWorkspaceStore } from '@/store'
 import { revealMatchInElement } from '@/editors/revealMatch'
+import { workspaceRelativePath } from '@/components/copilot/currentDocumentContext'
+import type { SelectionReference } from '@/components/copilot/selectionReference'
 import './prosemirror.css'
 
 interface Props {
@@ -103,11 +105,17 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const [slashMenu,  setSlashMenu]  = useState<{ query: string; top: number; left: number } | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [sceneItems, setSceneItems] = useState<DocOutlineItem[]>([])
+  const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number; ref: SelectionReference } | null>(null)
+  const [inlinePromptOpen, setInlinePromptOpen] = useState(false)
+  const [inlinePrompt, setInlinePrompt] = useState('')
   const slashMenuRef = useRef<typeof slashMenu>(null)
   const slashIndexRef = useRef(0)
 
   const revealTarget = useTabsStore(s => s.revealTarget)
   const consumeReveal = useTabsStore(s => s.consumeReveal)
+  const workspaceRoot = useWorkspaceStore(s => s.root)
+  const queueSelection = useCopilotDraftStore(s => s.queueSelection)
+  const setRightOpen = useUiStore(s => s.setRightOpen)
 
   const readonly = !!diffBlocks
 
@@ -200,6 +208,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
         const nextLineType = currentLineType(newState)
         setLineType(nextLineType)
         if (!readonly) updateSlashMenu(view)
+        updateSelectionMenu(view)
         saveViewState(view, newState, nextLineType)
 
         if (!readonly && tr.docChanged) {
@@ -219,6 +228,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     const initialLineType = cachedState?.lineType ?? currentLineType(state)
     setLineType(initialLineType)
     if (!readonly) updateSlashMenu(view)
+    if (!readonly) updateSelectionMenu(view)
     requestAnimationFrame(() => {
       if (scrollRef.current && cachedState) scrollRef.current.scrollTop = cachedState.scrollTop
     })
@@ -268,6 +278,14 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     const result = addEpisodeToFile(snapshotFile())
     await onSave(result.file)
     setEditorRevision(revision => revision + 1)
+  }
+
+  const sendSelectionToCopilot = (promptText?: string, autoSubmit = false) => {
+    if (!selectionMenu) return
+    queueSelection({ ref: selectionMenu.ref, promptText, autoSubmit })
+    setRightOpen(true)
+    setInlinePromptOpen(false)
+    setInlinePrompt('')
   }
 
   async function selectSlashOption(option: ScreenplaySlashOption) {
@@ -355,6 +373,45 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
                 })}
               </div>
             )}
+            {!readonly && selectionMenu && (
+              <div className="pm-ai-selection-menu" style={{ top: selectionMenu.top, left: selectionMenu.left }}>
+                {inlinePromptOpen ? (
+                  <form
+                    className="pm-ai-inline-form"
+                    onSubmit={event => {
+                      event.preventDefault()
+                      sendSelectionToCopilot(inlinePrompt.trim() ? `请改写这个选区：${inlinePrompt.trim()}` : '请改写这个选区', true)
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={inlinePrompt}
+                      onChange={event => setInlinePrompt(event.target.value)}
+                      placeholder="告诉 AI 怎么改写这个选区"
+                      onKeyDown={event => {
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          setInlinePromptOpen(false)
+                          setInlinePrompt('')
+                        }
+                      }}
+                    />
+                    <button type="submit">发送</button>
+                  </form>
+                ) : (
+                  <>
+                    <button onMouseDown={event => { event.preventDefault(); sendSelectionToCopilot() }}>
+                      <Ic.at width={13} height={13} />
+                      加入消息
+                    </button>
+                    <button onMouseDown={event => { event.preventDefault(); setInlinePromptOpen(true) }}>
+                      <Ic.spark width={13} height={13} />
+                      AI 编辑
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {Array.from({ length: pageCount }).map((_, i) => (
               <div key={i}>
                 <div className="pm-page-cover top"    style={{ top: i * PAGE_HEIGHT }} />
@@ -385,6 +442,23 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     })
   }
 
+  function updateSelectionMenu(view: EditorView) {
+    const ref = selectionReferenceFromView(view, filePath, workspaceRoot)
+    if (!ref || slashMenuRef.current) {
+      setSelectionMenu(null)
+      setInlinePromptOpen(false)
+      return
+    }
+    const coords = view.coordsAtPos(view.state.selection.from)
+    const rootRect = mountRef.current?.getBoundingClientRect()
+    if (!rootRect) return
+    setSelectionMenu({
+      ref,
+      top: Math.max(10, coords.top - rootRect.top - 42),
+      left: Math.max(26, coords.left - rootRect.left)
+    })
+  }
+
   function applySlashSelection(type: ScreenplayLineType) {
     const view = viewRef.current
     if (!view) return
@@ -395,6 +469,36 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     setSlashMenu(null)
     setSlashIndex(0)
     view.focus()
+  }
+}
+
+function blockInfoAt(state: EditorState, pos: number) {
+  const resolved = state.doc.resolve(Math.max(1, Math.min(pos, state.doc.content.size)))
+  for (let depth = resolved.depth; depth > 0; depth -= 1) {
+    const node = resolved.node(depth)
+    const id = typeof node.attrs.id === 'string' ? node.attrs.id : undefined
+    if (id) return { id, type: node.type.name }
+  }
+  return undefined
+}
+
+export function selectionReferenceFromView(view: EditorView, filePath: string, workspaceRoot: string | null): SelectionReference | null {
+  const { selection } = view.state
+  if (selection.empty) return null
+  const from = Math.min(selection.from, selection.to)
+  const to = Math.max(selection.from, selection.to)
+  if (to <= from) return null
+  const start = blockInfoAt(view.state, from)
+  const end = blockInfoAt(view.state, Math.max(from, to - 1))
+  return {
+    filePath,
+    relPath: workspaceRelativePath(filePath, workspaceRoot),
+    from,
+    to,
+    startBlockId: start?.id,
+    endBlockId: end?.id,
+    startBlockType: start?.type,
+    endBlockType: end?.type
   }
 }
 

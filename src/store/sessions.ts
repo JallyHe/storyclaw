@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AgentMode, AgentSnapshot, Session, Message } from '@/types'
 import type { IMConversationEvent } from '@/im/types'
+import { createSessionTimestamp, createTitleFromMessage, normalizeSessionTimestamp, touchSession } from './sessionMetadata'
 
 interface SessionsState {
   sessions: Session[]
@@ -25,17 +26,12 @@ interface SessionsState {
   restoreImSessions: (saved: Session[]) => void
 }
 
-const INITIAL_SESSION: Session = {
-  id: 's_new', title: '新会话', group: '进行中', time: '刚刚', messages: []
+function createBlankSession(id = 's_new'): Session {
+  const now = createSessionTimestamp()
+  return { id, title: '新会话', group: '进行中', time: now, createdAt: now, updatedAt: now, messages: [] }
 }
 
-function createTitleFromMessage(text: string): string {
-  const compact = text
-    .replace(/[#*_`>\-[\](){}]/g, '')
-    .replace(/\s+/g, '')
-    .replace(/[。！？!?，,；;：:]+$/g, '')
-  return compact.slice(0, 11) || '新会话'
-}
+const INITIAL_SESSION: Session = createBlankSession()
 
 function shouldAutoName(session: Session): boolean {
   return !session.titleEdited && (session.title === '新会话' || session.messages.length === 0)
@@ -52,7 +48,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const title = msg.role === 'user' && shouldAutoName(sess)
         ? createTitleFromMessage(msg.text)
         : sess.title
-      return { ...sess, title, messages: [...sess.messages, msg] }
+      return touchSession({ ...sess, title, messages: [...sess.messages, msg] })
     })
   })),
 
@@ -63,7 +59,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return sess
       const updated = { ...last, reply: [...last.reply.slice(0, -1), (last.reply[last.reply.length - 1] ?? '') + delta] }
-      return { ...sess, messages: [...msgs.slice(0, -1), updated] }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), updated] })
     })
   })),
 
@@ -74,7 +70,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant') return sess
       const step = { kind: tool as any, label, target }
-      return { ...sess, messages: [...msgs.slice(0, -1), { ...last, steps: [...last.steps, step] }] }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps: [...last.steps, step] }] })
     })
   })),
 
@@ -86,7 +82,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (!last || last.role !== 'assistant' || !last.steps.length) return sess
       const steps = [...last.steps]
       steps[steps.length - 1] = { ...steps[steps.length - 1], isError }
-      return { ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] })
     })
   })),
 
@@ -105,7 +101,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       // keep target as a short snippet for the row header
       const snippet = merged.replace(/\s+/g, ' ').slice(0, 60)
       steps[idx] = { ...step, thinking: merged, target: snippet }
-      return { ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] })
     })
   })),
 
@@ -118,7 +114,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const steps = last.steps.map(step =>
         step.isError === undefined ? { ...step, isError: false } : step
       )
-      return { ...sess, messages: [...msgs.slice(0, -1), { ...last, typing: false, steps }] }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, typing: false, steps }] })
     })
   })),
 
@@ -130,7 +126,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       return
     }
     const id = 's_' + Date.now()
-    const session: Session = { id, title: '新会话', group: '进行中', time: '刚刚', messages: [] }
+    const session: Session = createBlankSession(id)
     set(s => ({
       sessions: [session, ...s.sessions.map(sess => sess.group === '进行中' ? { ...sess, group: '今天' } : sess)],
       activeId: id,
@@ -181,7 +177,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   hydrateFromSnapshot: (snapshot) => set(s => {
     // 保留内存中的机器人会话（全局、不随工作区快照丢失）
     const imbot = s.sessions.filter(x => x.kind === 'imbot')
-    const agent = snapshot.sessions.map(session => ({ ...session, archived: Boolean(session.archived) }))
+    const agent = snapshot.sessions.map(session => {
+      const now = createSessionTimestamp()
+      const createdAt = normalizeSessionTimestamp(session.createdAt ?? session.time, now)
+      const updatedAt = normalizeSessionTimestamp(session.updatedAt ?? session.time, createdAt)
+      return { ...session, time: updatedAt, createdAt, updatedAt, archived: Boolean(session.archived) }
+    })
     let sessions: Session[] = [...imbot, ...agent]
     let activeId = snapshot.activeSessionId
     // 激活会话必须存在且未归档；否则落到首个可用会话，或补一个空白草稿
@@ -190,7 +191,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (firstAgent) {
         activeId = firstAgent.id
       } else {
-        const blank: Session = { id: 's_new', title: '新会话', group: '进行中', time: '刚刚', messages: [] }
+        const blank: Session = createBlankSession()
         sessions = [blank, ...sessions]
         activeId = blank.id
       }
@@ -220,15 +221,17 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
 
     if (exists) {
+      const now = createSessionTimestamp()
       return {
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
-            ? { ...sess, time: '刚刚', peerName: peer, messages: appendInto(sess.messages) }
+            ? touchSession({ ...sess, time: now, updatedAt: now, peerName: peer, messages: appendInto(sess.messages) }, now)
             : sess
         )
       }
     }
 
+    const now = createSessionTimestamp()
     const session: Session = {
       id: sessionId,
       kind: 'imbot',
@@ -237,7 +240,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       title: peer,
       titleEdited: true,
       group: '机器人',
-      time: '刚刚',
+      time: now,
+      createdAt: now,
+      updatedAt: now,
       messages: appendInto([])
     }
     // 新机器人会话置顶，但不抢占当前激活会话
@@ -248,7 +253,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     const existing = new Set(s.sessions.map(x => x.id))
     const toAdd = saved
       .filter(x => x.kind === 'imbot' && !existing.has(x.id))
-      .map(x => ({ ...x, archived: Boolean(x.archived) }))
+      .map(x => {
+        const now = createSessionTimestamp()
+        const createdAt = normalizeSessionTimestamp(x.createdAt ?? x.time, now)
+        const updatedAt = normalizeSessionTimestamp(x.updatedAt ?? x.time, createdAt)
+        return { ...x, time: updatedAt, createdAt, updatedAt, archived: Boolean(x.archived) }
+      })
     if (toAdd.length === 0) return {}
     return { sessions: [...toAdd, ...s.sessions] }
   })

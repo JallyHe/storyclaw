@@ -652,11 +652,17 @@ body.resizing, body.resizing * { cursor: col-resize !important; }
 /* ── Agent Composer (acomposer) ──────────────────────────── */
 .acomposer { background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 8px 10px; position: relative; transition: border-color .15s; }
 .acomposer:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+.ac-context-doc { display: flex; align-items: center; min-width: 0; margin: 0 0 5px; padding: 4px 7px; border-radius: 8px; background: color-mix(in srgb, var(--accent-ai) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent-ai) 18%, transparent); color: var(--text-2); font-size: 11.5px; }
+.ac-context-main { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.ac-context-ico { display: grid; place-items: center; flex: none; }
+.ac-context-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-0); font-size: 12px; font-weight: 600; }
+.ac-context-kind { flex: none; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: 11px; }
 .ac-input-wrap { position: relative; padding: 4px 4px 2px; }
 .ac-rich { min-height: 24px; max-height: 160px; overflow-y: auto; outline: none; color: var(--text-0); font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .acomposer.big .ac-rich { min-height: 42px; }
 .ac-rich:empty::before { content: attr(data-ph); color: var(--text-3); pointer-events: none; }
 .ac-tag-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; line-height: 1.3; padding: 1px 4px 1px 6px; margin: 0 1px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--chip-c, var(--accent)) 45%, var(--border)); background: color-mix(in srgb, var(--chip-c, var(--accent)) 14%, transparent); color: var(--text-0); white-space: nowrap; user-select: none; vertical-align: middle; }
+.ac-tag-chip.selection { --chip-c: var(--accent-ai); }
 .ac-tag-chip .tagc-pre { color: var(--chip-c, var(--accent)); font-family: "JetBrains Mono", monospace; font-weight: 600; }
 .ac-tag-chip .tagc-x { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 4px; border: none; padding: 0; color: var(--text-3); background: none; cursor: pointer; flex-shrink: 0; }
 .ac-tag-chip .tagc-x svg { display: block; }

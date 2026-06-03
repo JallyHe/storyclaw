@@ -20,6 +20,7 @@ interface UiState {
   setLeftPanel: (p: LeftPanel) => void
   toggleLeft: () => void
   toggleRight: () => void
+  setRightOpen: (rightOpen: boolean) => void
   setExplorerWidth: (w: number) => void
   setCopilotWidth: (w: number) => void
   setSessionsWidth: (w: number) => void
@@ -39,6 +40,7 @@ export const useUiStore = create<UiState>((set) => ({
   setLeftPanel: (leftPanel) => set({ leftPanel }),
   toggleLeft: () => set(s => ({ leftOpen: !s.leftOpen })),
   toggleRight: () => set(s => ({ rightOpen: !s.rightOpen })),
+  setRightOpen: (rightOpen) => set({ rightOpen }),
   setExplorerWidth: (explorerWidth) => set({ explorerWidth }),
   setCopilotWidth: (copilotWidth) => set({ copilotWidth }),
   setSessionsWidth: (sessionsWidth) => set({ sessionsWidth }),

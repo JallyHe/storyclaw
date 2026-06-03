@@ -14,11 +14,12 @@ function statusClass(badge?: string) {
 const NODE_MIME = 'application/x-storyclaw-node'
 const PREFETCH_EXTS = new Set(['ep', 'chr', 'wld', 'cfg'])
 
-function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, onNodeDragStart }: {
+function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, onNodeDragStart, selectedNodeId, onSelect }: {
   node: FileNode; depth: number; isEditing: boolean; editValue: string; onChange: (val: string) => void
   onConfirm: () => void; onCancel: () => void; activeFile: string | null
   onOpen: (id: string) => void | Promise<void>; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void
   onNodeDragStart: (event: DragEvent, node: TreeNode) => void
+  selectedNodeId?: string | null; onSelect: (node: TreeNode) => void
 }) {
   const kind = FILE_KIND[node.ext] ?? { icon: Ic.fileScene, color: 'var(--accent)' }
   const isActive = activeFile === node.id
@@ -57,11 +58,11 @@ function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfir
 
   return (
     <div
-      className={`tree-row file-row${isActive ? ' on' : ''}`}
+      className={`tree-row file-row${isActive ? ' on' : ''}${selectedNodeId === node.id ? ' selected' : ''}`}
       style={{ paddingLeft: 10 + depth * 15 }}
       draggable
       onDragStart={event => onNodeDragStart(event, node)}
-      onClick={() => onOpen(node.id)}
+      onClick={() => { onSelect(node); onOpen(node.id) }}
       onContextMenu={event => onContext(event, node)}
       title={`${node.name}.${node.ext}`}
     >
@@ -77,13 +78,14 @@ function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfir
   )
 }
 
-function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, editingNodeId, onNodeDragStart, onDropToFolder, dragOverId, setDragOverId }: {
+function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, editingNodeId, onNodeDragStart, onDropToFolder, dragOverId, setDragOverId, selectedNodeId, onSelect }: {
   node: FolderNode; depth: number; expanded: Set<string>; toggle: (id: string) => void
   isEditing: boolean; editValue: string; onChange: (val: string) => void; onConfirm: () => void; onCancel: () => void
   activeFile: string | null; onOpen: (id: string) => void | Promise<void>; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void; editingNodeId: string | null
   onNodeDragStart: (event: DragEvent, node: TreeNode) => void
   onDropToFolder: (event: DragEvent, folderId: string) => void
   dragOverId: string | null; setDragOverId: (id: string | null) => void
+  selectedNodeId?: string | null; onSelect: (node: TreeNode) => void
 }) {
   const open = expanded.has(node.id)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -124,14 +126,14 @@ function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue
   return (
     <>
       <div
-        className={`tree-row folder-row${dragOverId === node.id ? ' drag-over' : ''}`}
+        className={`tree-row folder-row${dragOverId === node.id ? ' drag-over' : ''}${selectedNodeId === node.id ? ' selected' : ''}`}
         style={{ paddingLeft: 8 + depth * 15 }}
         draggable
         onDragStart={event => onNodeDragStart(event, node)}
         onDragOver={event => { event.preventDefault(); event.stopPropagation(); setDragOverId(node.id) }}
         onDragLeave={event => { event.stopPropagation(); if (dragOverId === node.id) setDragOverId(null) }}
         onDrop={event => onDropToFolder(event, node.id)}
-        onClick={() => toggle(node.id)}
+        onClick={() => { onSelect(node); toggle(node.id) }}
         onContextMenu={event => onContext(event, node)}
       >
         <span className={`twisty${open ? ' open' : ''}`}>
@@ -149,8 +151,8 @@ function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue
       {open && node.children.map(c => {
         const isEditingChild = editingNodeId === c.id
         return c.kind === 'folder'
-          ? <EditableFolderRow key={c.id} node={c} depth={depth + 1} expanded={expanded} toggle={toggle} isEditing={isEditingChild} editValue={isEditingChild ? editValue : ""} onChange={onChange} onConfirm={onConfirm} onCancel={onCancel} activeFile={activeFile} onOpen={onOpen} changedSet={changedSet} onContext={onContext} editingNodeId={editingNodeId} onNodeDragStart={onNodeDragStart} onDropToFolder={onDropToFolder} dragOverId={dragOverId} setDragOverId={setDragOverId} />
-          : <EditableFileRow key={c.id} node={c} depth={depth + 1} isEditing={isEditingChild} editValue={isEditingChild ? editValue : ""} onChange={onChange} onConfirm={onConfirm} onCancel={onCancel} activeFile={activeFile} onOpen={onOpen} changedSet={changedSet} onContext={onContext} onNodeDragStart={onNodeDragStart} />
+          ? <EditableFolderRow key={c.id} node={c} depth={depth + 1} expanded={expanded} toggle={toggle} isEditing={isEditingChild} editValue={isEditingChild ? editValue : ""} onChange={onChange} onConfirm={onConfirm} onCancel={onCancel} activeFile={activeFile} onOpen={onOpen} changedSet={changedSet} onContext={onContext} editingNodeId={editingNodeId} onNodeDragStart={onNodeDragStart} onDropToFolder={onDropToFolder} dragOverId={dragOverId} setDragOverId={setDragOverId} selectedNodeId={selectedNodeId} onSelect={onSelect} />
+          : <EditableFileRow key={c.id} node={c} depth={depth + 1} isEditing={isEditingChild} editValue={isEditingChild ? editValue : ""} onChange={onChange} onConfirm={onConfirm} onCancel={onCancel} activeFile={activeFile} onOpen={onOpen} changedSet={changedSet} onContext={onContext} onNodeDragStart={onNodeDragStart} selectedNodeId={selectedNodeId} onSelect={onSelect} />
       })}
     </>
   )
@@ -170,6 +172,7 @@ export function Explorer({ width }: { width: number }) {
   const [newSubOpen, setNewSubOpen] = useState(false)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [rootDragOver, setRootDragOver] = useState(false)
+  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null)
 
   const toggle = useCallback((id: string) => {
     if (id === '__collapseAll') { setExpanded(new Set()); return }
@@ -220,6 +223,7 @@ export function Explorer({ width }: { width: number }) {
   const handleContext = (event: MouseEvent, node: TreeNode) => {
     event.preventDefault()
     event.stopPropagation()
+    setSelectedNode(node)
     setMenu({ x: event.clientX, y: event.clientY, node })
   }
 
@@ -301,6 +305,28 @@ export function Explorer({ width }: { width: number }) {
       if (clipboard) await pasteFromClipboard(targetDir)
     } catch (err) {
       console.error('Paste failed:', err)
+    }
+  }
+
+  const targetDirForSelection = () => {
+    if (!root) return ''
+    if (!selectedNode) return root
+    return selectedNode.kind === 'folder' ? selectedNode.id : dirname(selectedNode.id)
+  }
+
+  const handleExplorerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (editingNodeId) return
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+    const key = event.key.toLowerCase()
+    if (key === 'c' && selectedNode) {
+      event.preventDefault()
+      handleCopy(selectedNode)
+    } else if (key === 'x' && selectedNode) {
+      event.preventDefault()
+      handleCut(selectedNode)
+    } else if (key === 'v') {
+      event.preventDefault()
+      void handlePaste(targetDirForSelection())
     }
   }
 
@@ -409,6 +435,8 @@ export function Explorer({ width }: { width: number }) {
             onDropToFolder={handleDropToFolder}
             dragOverId={dragOverId}
             setDragOverId={setDragOverId}
+            selectedNodeId={selectedNode?.id}
+            onSelect={setSelectedNode}
           />
         )
       } else {
@@ -427,6 +455,8 @@ export function Explorer({ width }: { width: number }) {
             changedSet={changedSet}
             onContext={handleContext}
             onNodeDragStart={handleNodeDragStart}
+            selectedNodeId={selectedNode?.id}
+            onSelect={setSelectedNode}
           />
         )
       }
@@ -463,7 +493,10 @@ export function Explorer({ width }: { width: number }) {
         </div>
       ) : (
         <div
+          role="tree"
+          tabIndex={0}
           className={`sb-scroll tree${rootDragOver && !dragOverId ? ' drag-over-root' : ''}`}
+          onKeyDown={handleExplorerKeyDown}
           onContextMenu={event => {
             event.preventDefault()
             setMenu({ x: event.clientX, y: event.clientY, node: null })

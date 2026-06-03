@@ -3,7 +3,6 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  createDefaultAgentSnapshot,
   loadAgentSnapshot,
   saveAgentSnapshot
 } from '../electron/agent/persistence'
@@ -25,7 +24,17 @@ describe('agent persistence', () => {
   it('returns a default snapshot when no state exists yet', async () => {
     const dir = await createTempDir()
 
-    await expect(loadAgentSnapshot(dir)).resolves.toEqual(createDefaultAgentSnapshot())
+    const snapshot = await loadAgentSnapshot(dir)
+    expect(snapshot).toMatchObject({
+      version: 1,
+      activeSessionId: 's_new',
+      modeBySessionId: { s_new: 'craft' },
+      pendingChanges: []
+    })
+    expect(snapshot.sessions[0]).toMatchObject({ id: 's_new', title: '新会话', group: '进行中', messages: [] })
+    expect(Date.parse(snapshot.sessions[0].time)).not.toBeNaN()
+    expect(snapshot.sessions[0].createdAt).toBe(snapshot.sessions[0].time)
+    expect(snapshot.sessions[0].updatedAt).toBe(snapshot.sessions[0].time)
   })
 
   it('round trips UI sessions, active session, mode, and pending changes', async () => {
@@ -39,7 +48,9 @@ describe('agent persistence', () => {
           id: 's_2',
           title: 'EP01 rewrite',
           group: '今天',
-          time: '刚刚',
+          time: '2026-06-03T03:00:00.000Z',
+          createdAt: '2026-06-03T03:00:00.000Z',
+          updatedAt: '2026-06-03T03:00:00.000Z',
           archived: false,
           titleEdited: false,
           messages: [
@@ -97,8 +108,8 @@ describe('agent persistence', () => {
       activeSessionId: 's_archived',
       modeBySessionId: { s_archived: 'craft', s_visible: 'ask' },
       sessions: [
-        { id: 's_archived', title: '旧会话', group: '归档', time: '昨天', archived: true, messages: [] },
-        { id: 's_visible', title: '当前会话', group: '今天', time: '刚刚', messages: [] }
+        { id: 's_archived', title: '旧会话', group: '归档', time: '2026-06-01T03:00:00.000Z', archived: true, messages: [] },
+        { id: 's_visible', title: '当前会话', group: '今天', time: '2026-06-03T03:00:00.000Z', messages: [] }
       ],
       pendingChanges: []
     }

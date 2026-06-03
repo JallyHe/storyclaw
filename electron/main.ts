@@ -42,13 +42,12 @@ import { loadIMConfig } from './im/config'
 import { loadConversations, saveConversations } from './im/conversations'
 import type { IMConfigSnapshot, IMPlatform } from '../src/im/types'
 import {
-  createFileNameW,
-  createPreferredDropEffect,
-  createWindowsDropFiles,
   normalizeClipboardPaths,
   parseClipboardTextPaths,
-  parseWindowsDropFiles,
-  splitNullTerminatedPaths,
+  readMacClipboardFilePaths,
+  readWindowsClipboardFilePaths,
+  writeMacClipboardFilePaths,
+  writeWindowsClipboardFilePaths,
   type ClipboardFileOperation
 } from './desktop/clipboardFiles'
 import {
@@ -65,30 +64,56 @@ export let win: BrowserWindow | null = null
 let stopWatch: (() => void) | null = null
 const appIconPath = path.join(__dirname, '../assets/storyclaw-logo.png')
 
-function readClipboardFilePaths(): string[] {
-  const formats = clipboard.availableFormats()
-  const paths: string[] = []
-  if (formats.includes('FileNameW')) {
-    paths.push(...splitNullTerminatedPaths(clipboard.readBuffer('FileNameW').toString('utf16le')))
-  }
-  if (formats.includes('CF_HDROP')) {
-    paths.push(...parseWindowsDropFiles(clipboard.readBuffer('CF_HDROP')))
-  }
-  if (paths.length === 0) {
-    paths.push(...parseClipboardTextPaths(clipboard.readText()))
-  }
-  return normalizeClipboardPaths(paths)
+function readElectronClipboardFilePaths(): string[] {
+  return normalizeClipboardPaths(parseClipboardTextPaths(clipboard.readText()))
 }
 
-function writeClipboardFilePaths(paths: string[], operation: ClipboardFileOperation = 'copy'): void {
+async function readClipboardFilePaths(): Promise<string[]> {
+  if (process.platform === 'win32') {
+    try {
+      const nativePaths = normalizeClipboardPaths(await readWindowsClipboardFilePaths())
+      if (nativePaths.length > 0) return nativePaths
+    } catch (error) {
+      console.warn('Failed to read Windows file clipboard via native bridge:', error)
+    }
+  }
+  if (process.platform === 'darwin') {
+    try {
+      const nativePaths = normalizeClipboardPaths(await readMacClipboardFilePaths())
+      if (nativePaths.length > 0) return nativePaths
+    } catch (error) {
+      console.warn('Failed to read macOS file clipboard via native bridge:', error)
+    }
+  }
+  return readElectronClipboardFilePaths()
+}
+
+function writeElectronClipboardFilePaths(paths: string[]): void {
   const normalized = normalizeClipboardPaths(paths)
   if (normalized.length === 0) return
   clipboard.writeText(normalized.join('\n'))
+}
+
+async function writeClipboardFilePaths(paths: string[], operation: ClipboardFileOperation = 'copy'): Promise<void> {
+  const normalized = normalizeClipboardPaths(paths)
+  if (normalized.length === 0) return
   if (process.platform === 'win32') {
-    clipboard.writeBuffer('FileNameW', createFileNameW(normalized))
-    clipboard.writeBuffer('CF_HDROP', createWindowsDropFiles(normalized))
-    clipboard.writeBuffer('Preferred DropEffect', createPreferredDropEffect(operation))
+    try {
+      await writeWindowsClipboardFilePaths(normalized, operation)
+      return
+    } catch (error) {
+      console.warn('Failed to write Windows file clipboard via native bridge:', error)
+    }
   }
+  if (process.platform === 'darwin') {
+    try {
+      await writeMacClipboardFilePaths(normalized)
+      return
+    } catch (error) {
+      console.warn('Failed to write macOS file clipboard via native bridge:', error)
+    }
+  }
+  writeElectronClipboardFilePaths(normalized)
 }
 
 async function waitForRenderer(url: string): Promise<boolean> {
@@ -330,7 +355,7 @@ ipcMain.handle('workspace:readClipboardFilePaths', async () => {
 })
 
 ipcMain.handle('workspace:writeClipboardFilePaths', async (_e, paths: string[], operation?: ClipboardFileOperation) => {
-  writeClipboardFilePaths(paths, operation)
+  await writeClipboardFilePaths(paths, operation)
 })
 
 ipcMain.handle('workspace:revealInExplorer', async (_e, filePath: string) => {

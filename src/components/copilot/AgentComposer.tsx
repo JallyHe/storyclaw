@@ -1,9 +1,11 @@
 import { forwardRef, useImperativeHandle, useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { agentIpc } from '@/ipc/agent'
 import { workspaceIpc } from '@/ipc/workspace'
-import { useSessionsStore, useWorkspaceStore, useUiStore } from '@/store'
+import { useSessionsStore, useWorkspaceStore, useUiStore, useTabsStore, useCopilotDraftStore } from '@/store'
 import type { AgentConfigSnapshot, AgentMode, AgentModelConfig, AgentModelOption, AgentProviderApi, FileNode, FolderNode, AgentResources } from '@/types'
 import { FILE_KIND, Ic } from '@/components/icons'
+import { appendCurrentDocumentContext, documentExtension, documentKindLabel, workspaceRelativePath } from './currentDocumentContext'
+import { encodeSelectionReference, selectionLabel, type SelectionReference } from './selectionReference'
 
 /** 输入框选择器里的一个可选项：内置专家（agent）或创作技能（skill）。 */
 interface PickEntry {
@@ -200,13 +202,14 @@ interface Props {
   busy: boolean
   placeholder?: string
   big?: boolean
+  includeCurrentDocumentContext?: boolean
 }
 
 export interface AgentComposerHandle {
   setText(text: string): void
 }
 
-export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function AgentComposer({ busy, placeholder, big }, ref) {
+export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function AgentComposer({ busy, placeholder, big, includeCurrentDocumentContext = false }, ref) {
   const [pop, setPop] = useState<string | null>(null)
   const [mode, setMode] = useState<AgentMode>('craft')
   const [model, setModel] = useState('')
@@ -230,6 +233,9 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const listRef = useRef<HTMLDivElement>(null)
   const root = useWorkspaceStore(s => s.root)
   const tree = useWorkspaceStore(s => s.tree)
+  const activeFile = useTabsStore(s => s.activeFile)
+  const queuedSelection = useCopilotDraftStore(s => s.queuedSelection)
+  const consumeQueuedSelection = useCopilotDraftStore(s => s.consumeSelection)
   const { addMessage, activeId } = useSessionsStore()
   const openSettings = useUiStore(s => s.openSettings)
 
@@ -240,6 +246,21 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const hasSelectedModel = Boolean(curModelOption && curModel)
   const isConfigured = Boolean(curModelOption?.configured)
   const modelWarning = getConfigMessage(curModelOption)
+  const currentDocument = useMemo(() => {
+    if (!includeCurrentDocumentContext || !activeFile) return null
+    const relPath = workspaceRelativePath(activeFile, root)
+    const ext = documentExtension(activeFile)
+    const name = relPath.split('/').pop() ?? relPath
+    const kind = FILE_KIND[ext]
+    return {
+      relPath,
+      name,
+      ext,
+      label: documentKindLabel(ext),
+      color: kind?.color ?? 'var(--accent-ai)',
+      icon: kind?.icon ?? Ic.fileScene
+    }
+  }, [activeFile, includeCurrentDocumentContext, root])
   const pickEntries = useMemo<PickEntry[]>(() => {
     const toEntry = (kind: 'agent' | 'skill') => (r: { name: string; title: string; description: string; category?: string }): PickEntry => ({
       id: `${kind}:${r.name}`,
@@ -349,19 +370,19 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     setText: setComposerText
   }), [setComposerText])
 
-  function makeChip(kind: 'skill' | 'agent' | 'file', label: string, token: string, color?: string) {
+  function makeChip(kind: 'skill' | 'agent' | 'file' | 'selection', label: string, token: string, color?: string) {
     const span = document.createElement('span')
-    span.className = `ac-tag-chip ${kind === 'file' ? 'file' : 'skill'}`
+    span.className = `ac-tag-chip ${kind === 'file' ? 'file' : kind === 'selection' ? 'selection' : 'skill'}`
     span.contentEditable = 'false'
     span.dataset.token = token
     span.dataset.label = label   // human-readable display name (Chinese title)
     if (color) span.style.setProperty('--chip-c', color)
 
     // Only show the @ prefix for file chips; skill/agent chips need no sigil
-    if (kind === 'file') {
+    if (kind === 'file' || kind === 'selection') {
       const pre = document.createElement('span')
       pre.className = 'tagc-pre'
-      pre.textContent = '@'
+      pre.textContent = kind === 'selection' ? '§' : '@'
       span.appendChild(pre)
     }
 
@@ -387,7 +408,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     return span
   }
 
-  function insertChip(kind: 'skill' | 'agent' | 'file', label: string, token: string, color?: string) {
+  function insertChip(kind: 'skill' | 'agent' | 'file' | 'selection', label: string, token: string, color?: string) {
     const editor = edRef.current
     if (!editor) return
     const selection = window.getSelection()
@@ -434,6 +455,17 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     insertChip('file', label, `@[${toRelPath(node.id)}]`, kind?.color)
   }
 
+  function insertSelectionReference(ref: SelectionReference, promptText?: string) {
+    insertChip('selection', selectionLabel(ref), encodeSelectionReference(ref), 'var(--accent-ai)')
+    if (promptText?.trim()) {
+      const editor = edRef.current
+      if (!editor) return
+      editor.appendChild(document.createTextNode(promptText.trim()))
+      editor.appendChild(document.createTextNode(' '))
+      sync()
+    }
+  }
+
   function getTrigger(): { kind: 'slash' | 'mention'; query: string } | null {
     const selection = window.getSelection()
     if (!selection?.rangeCount) return null
@@ -472,18 +504,49 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     return text.replace(/(@(?:agent|skill):[^\s|]+)\|[^\s]+/g, '$1')
   }
 
-  const submit = useCallback(async () => {
-    const text = serialize()
+  function inlineEditDisplayText(promptText?: string): string {
+    const brief = (promptText ?? '').trim().replace(/^请改写这个选区[:：]?\s*/, '').trim()
+    return brief ? `AI 编辑选区：${brief}` : 'AI 编辑选区'
+  }
+
+  const sendPromptText = useCallback(async (text: string, visibleText = text, clearEditor = false) => {
     if (!text || busy || !isConfigured || !hasSelectedModel) return
-    if (edRef.current) edRef.current.innerHTML = ''
-    setHasContent(false)
+    if (clearEditor && edRef.current) {
+      edRef.current.innerHTML = ''
+      setHasContent(false)
+    }
     setTrigger(null)
     setMPath([])
-    addMessage({ role: 'user', text })
+    addMessage({ role: 'user', text: visibleText })
     addMessage({ role: 'assistant', steps: [], reply: [], typing: true })
     // Strip display labels (|中文名) before sending to the AI model
-    await agentIpc.send(activeId, stripLabels(text), mode, permission, model || undefined)
-  }, [activeId, addMessage, busy, hasSelectedModel, isConfigured, mode, model, permission])
+    const strippedText = stripLabels(text)
+    const prompt = includeCurrentDocumentContext
+      ? appendCurrentDocumentContext(strippedText, { activeFile, workspaceRoot: root })
+      : strippedText
+    await agentIpc.send(activeId, prompt, mode, permission, model || undefined)
+  }, [activeFile, activeId, addMessage, busy, hasSelectedModel, includeCurrentDocumentContext, isConfigured, mode, model, permission, root])
+
+  const submit = useCallback(async () => {
+    await sendPromptText(serialize(), undefined, true)
+  }, [sendPromptText])
+
+  useEffect(() => {
+    if (!queuedSelection) return
+    if (queuedSelection.autoSubmit) {
+      if (busy || !isConfigured || !hasSelectedModel) return
+      const selection = consumeQueuedSelection()
+      if (!selection) return
+      const promptText = selection.promptText?.trim() || '请改写这个选区'
+      const text = `${encodeSelectionReference(selection.ref)} ${promptText}`
+      void sendPromptText(text, inlineEditDisplayText(promptText))
+      return
+    }
+    const selection = consumeQueuedSelection()
+    if (!selection) return
+    insertSelectionReference(selection.ref, selection.promptText)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, consumeQueuedSelection, hasSelectedModel, isConfigured, queuedSelection, sendPromptText])
 
   const stop = useCallback(async () => {
     await agentIpc.stop(activeId)
@@ -687,6 +750,18 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
           >
             {hasSelectedModel ? '配置模型' : '添加模型'}
           </button>
+        </div>
+      )}
+
+      {currentDocument && (
+        <div className="ac-context-doc" title={currentDocument.relPath}>
+          <span className="ac-context-main">
+            <span className="ac-context-ico" style={{ color: currentDocument.color }}>
+              <currentDocument.icon width={14} height={14} />
+            </span>
+            <span className="ac-context-name">{currentDocument.name}</span>
+            <span className="ac-context-kind">{currentDocument.label}</span>
+          </span>
         </div>
       )}
 
