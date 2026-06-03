@@ -95,10 +95,32 @@ describe('parseFile', () => {
     expect(serializeFile(parsed)).toContain('苏晚')
   })
 
-  it('parses .wld file', () => {
-    const wld = { version: 1, title: '回声节目', body: '深夜节目' }
+  it('parses .wld file as a six-section project setting sheet', () => {
+    const wld = {
+      version: 1,
+      title: '回声节目',
+      sections: {
+        premise: '深夜节目',
+        timeAndPlace: '当代海城',
+        rules: '来电不能被挂断',
+        socialRelations: '电台与听众互相依赖',
+        keySpaces: '直播间',
+        backstoryAndMaterials: '三年前旧案'
+      }
+    }
     const result = parseFile('wld', JSON.stringify(wld))
-    expect(result).toMatchObject({ title: '回声节目' })
+    expect(result).toMatchObject({
+      title: '回声节目',
+      sections: {
+        premise: '深夜节目',
+        timeAndPlace: '当代海城',
+        rules: '来电不能被挂断',
+        socialRelations: '电台与听众互相依赖',
+        keySpaces: '直播间',
+        backstoryAndMaterials: '三年前旧案'
+      }
+    })
+    expect(serializeFile(result)).not.toContain('"body"')
   })
 
   it('parses .cfg project config', () => {
@@ -135,8 +157,10 @@ describe('parseFile', () => {
 
     const config = JSON.parse(await fs.readFile(path.join(root, '项目配置.cfg'), 'utf-8'))
     const episodeFiles = await fs.readdir(path.join(root, '剧集'))
+    const settingFiles = await fs.readdir(path.join(root, '设定'))
     expect(config).toMatchObject({ type: 'short', episodes: 20, screenplayLayout: 'single-file-multi-episode' })
     expect(episodeFiles).toEqual([])
+    expect(settingFiles).toEqual(['项目设定.wld'])
   })
 
   it('serializes .ep files as lightweight markup instead of json', () => {

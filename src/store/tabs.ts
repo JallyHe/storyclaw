@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useEditorViewCacheStore } from './editorViewCache'
 
 export interface RevealTarget {
   path: string
@@ -42,21 +43,28 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     const i = s.openTabs.indexOf(path)
     const next = s.openTabs.filter(t => t !== path)
     const active = path === s.activeFile ? (next[Math.max(0, i - 1)] ?? next[0] ?? null) : s.activeFile
+    useEditorViewCacheStore.getState().drop(path)
     return { openTabs: next, activeFile: active }
   }),
 
-  closeOtherTabs: (path) => set(s => (
-    s.openTabs.includes(path)
-      ? { openTabs: [path], activeFile: path }
-      : s
-  )),
+  closeOtherTabs: (path) => set(s => {
+    if (!s.openTabs.includes(path)) return s
+    useEditorViewCacheStore.getState().keepOnly([path])
+    return { openTabs: [path], activeFile: path }
+  }),
 
-  closeAllTabs: () => set({ openTabs: [], activeFile: null, revealTarget: null }),
+  closeAllTabs: () => {
+    useEditorViewCacheStore.getState().clear()
+    set({ openTabs: [], activeFile: null, revealTarget: null })
+  },
 
-  renameTab: (oldPath, nextPath) => set(s => ({
-    openTabs: s.openTabs.map(path => path === oldPath ? nextPath : path),
-    activeFile: s.activeFile === oldPath ? nextPath : s.activeFile
-  })),
+  renameTab: (oldPath, nextPath) => {
+    useEditorViewCacheStore.getState().rename(oldPath, nextPath)
+    set(s => ({
+      openTabs: s.openTabs.map(path => path === oldPath ? nextPath : path),
+      activeFile: s.activeFile === oldPath ? nextPath : s.activeFile
+    }))
+  },
 
   setActive: (path) => set({ activeFile: path })
 }))

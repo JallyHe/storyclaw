@@ -69,7 +69,7 @@ export const readScreenplay = defineTool({
 - .md 大纲文件：返回纯 Markdown 文本（直接可读写）
 - .ep 剧集文件：返回轻标记剧本文本，不是 JSON
 - .chr 人物文件：返回 JSON
-- .wld 设定文件：返回 JSON（含 body 字段，内容为文本）
+- .wld 项目设定文件：返回 JSON（含 sections 六个 Markdown 字符串分区）
 - 项目配置.cfg：返回项目配置 JSON`,
   parameters: Type.Object({
     path: Type.String({ description: '相对于工作区根目录的路径，例如 大纲/EP01 大纲.md 或 剧集/EP01 第一集.ep' })
@@ -103,7 +103,7 @@ export const writeScreenplay = defineTool({
 - .md 大纲文件：content 直接填写 Markdown 文本，会直接写入磁盘（需用户授权）
 - .ep 文件：content 填写完整轻标记剧本文本，必须包含 @episode/@title/@status 文件头；同一个 .ep 可包含多个 @episode 段，文件顶部可选 @series；多集时每集都必须各自包含 @episode/@title/@status；场次用 "# 第 1 场 地点 内景/外景 日/夜"；转场用 "> 切至："；对白用 "人物（说明）：对白"；动作写普通段落；块之间最多 1 个空行；不要输出 JSON
 - .chr 文件：content 填写完整 JSON 字符串，字段至少包含 version/name/role/age/color/tagline/traits/arc/voice/appearsIn
-- .wld 文件：content 填写完整 JSON 字符串，字段为 version/title/body，body 可包含 Markdown 文本
+- .wld 文件：content 填写完整 JSON 字符串，字段为 version/title/sections；sections 包含 premise、timeAndPlace、rules、socialRelations、keySpaces、backstoryAndMaterials 六个 Markdown 字符串
 - 项目配置.cfg：content 填写完整项目配置 JSON 字符串
 注意：写入时 default 权限模式需要用户逐次授权，full 权限模式自动执行。`,
   parameters: Type.Object({

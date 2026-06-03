@@ -49,8 +49,8 @@ const api = {
       ipcRenderer.invoke('workspace:importScreenplays', root, targetDir),
     readClipboardFilePaths: (): Promise<string[]> =>
       ipcRenderer.invoke('workspace:readClipboardFilePaths'),
-    writeClipboardFilePaths: (paths: string[]): Promise<void> =>
-      ipcRenderer.invoke('workspace:writeClipboardFilePaths', paths),
+    writeClipboardFilePaths: (paths: string[], operation?: 'copy' | 'cut'): Promise<void> =>
+      ipcRenderer.invoke('workspace:writeClipboardFilePaths', paths, operation),
     applyDefaultContent: (filePath: string): Promise<void> =>
       ipcRenderer.invoke('workspace:applyDefaultContent', filePath),
     search: (root: string, query: string, opts: unknown): Promise<unknown> =>

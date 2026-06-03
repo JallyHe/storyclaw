@@ -22,9 +22,9 @@ export function FileEditor({ filePath }: Props) {
   const { changes, acceptChange, rejectChange } = useChangesStore()
   // Re-load when this file's version bumps (AI wrote to it outside the editor)
   const fileVersion = useWorkspaceStore(s => (filePath ? s.fileVersions.get(filePath) ?? 0 : 0))
-  const [file, setFile] = useState<StoryFile | null>(null)
+  const [file, setFile] = useState<StoryFile | null>(() => filePath ? useWorkspaceStore.getState().fileCache.get(filePath) ?? null : null)
   const [loading, setLoading] = useState(false)
-  const [loadedPath, setLoadedPath] = useState<string | null>(null)
+  const [loadedPath, setLoadedPath] = useState<string | null>(() => filePath && useWorkspaceStore.getState().fileCache.has(filePath) ? filePath : null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const saveCurrentFile = useCallback((updated: StoryFile, options?: { updateLocalState?: boolean }) => {
@@ -39,6 +39,14 @@ export function FileEditor({ filePath }: Props) {
     const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
     // Only structured story files are loaded via getFile (JSON/markup parsing)
     if (!STORY_EXTS.has(ext)) return
+    const cached = useWorkspaceStore.getState().fileCache.get(filePath)
+    if (cached) {
+      setFile(cached)
+      setLoadedPath(filePath)
+      setLoading(false)
+      setLoadError(null)
+      return
+    }
     setLoading(true)
     setLoadError(null)
     getFile(filePath).then(f => {
@@ -93,7 +101,7 @@ export function FileEditor({ filePath }: Props) {
         </div>
       )
     case 'chr': return <div style={scrollWrap}><CharacterEditor filePath={filePath} file={file as ChrFile} /></div>
-    case 'wld': return <div style={scrollWrap}><WorldEditor     filePath={filePath} file={file as WldFile} /></div>
+    case 'wld': return <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}><WorldEditor filePath={filePath} file={file as WldFile} /></div>
     case 'cfg': return <div style={scrollWrap}><ProjectConfigEditor filePath={filePath} file={file as ProjectConfigFile} /></div>
     default:    return <div style={{ padding: 32, color: 'var(--text-3)' }}>不支持的文件类型：.{ext}</div>
   }

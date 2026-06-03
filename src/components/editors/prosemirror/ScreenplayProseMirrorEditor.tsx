@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { EditorState } from 'prosemirror-state'
+import { EditorState, Selection, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import type { DiffBlock, EpFile } from '@/types'
 import { DocumentEditorShell, type DocOutlineItem } from '@/components/editors/DocumentEditorShell'
@@ -11,7 +11,7 @@ import { addEpisodeToFile } from '@/editors/screenplay/episodeCollection'
 import { episodeLabel } from '@/editors/screenplay/episodeMeta'
 import { screenplaySchema, SCREENPLAY_LABELS, type ScreenplayLineType } from '@/editors/screenplay/schema'
 import { DiffBar } from '@/components/editors/episode/DiffBar'
-import { useTabsStore } from '@/store'
+import { useEditorViewCacheStore, useTabsStore } from '@/store'
 import { revealMatchInElement } from '@/editors/revealMatch'
 import './prosemirror.css'
 
@@ -90,6 +90,7 @@ function extractScenes(state: EditorState, view: EditorView): DocOutlineItem[] {
 
 export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffBlocks, onSave, onAccept, onReject }: Props) {
   const mountRef   = useRef<HTMLDivElement>(null)
+  const scrollRef  = useRef<HTMLDivElement>(null)
   const viewRef    = useRef<EditorView | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef({ file, onSave })
@@ -98,7 +99,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const episodes = file.episodes && file.episodes.length > 1 ? file.episodes : null
   const [pageCount,  setPageCount]  = useState(1)
   const [wordCount,  setWordCount]  = useState(0)
-  const [lineType,   setLineType]   = useState<ScreenplayLineType>(() => firstBlockLineType(file))
+  const [lineType,   setLineType]   = useState<ScreenplayLineType>(() => useEditorViewCacheStore.getState().getScreenplayState(filePath)?.lineType ?? firstBlockLineType(file))
   const [slashMenu,  setSlashMenu]  = useState<{ query: string; top: number; left: number } | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [sceneItems, setSceneItems] = useState<DocOutlineItem[]>([])
@@ -143,16 +144,27 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   // useLayoutEffect fires synchronously after DOM mutations and before paint,
   // so the toolbar never shows the old/default type for even one frame.
   useLayoutEffect(() => {
-    setLineType(firstBlockLineType(displayedFile))
-  }, [displayedFile])
+    setLineType(useEditorViewCacheStore.getState().getScreenplayState(filePath)?.lineType ?? firstBlockLineType(displayedFile))
+  }, [displayedFile, filePath])
 
   useEffect(() => {
     if (!mountRef.current) return
     const doc   = screenplaySchema.nodeFromJSON(epFileToScreenplayDoc(displayedFile, { includeEpisodeHeadings: true }))
-    const state = EditorState.create({
+    let state = EditorState.create({
       doc,
       plugins: readonly ? [] : createScreenplayPlugins()
     })
+    const cachedState = useEditorViewCacheStore.getState().getScreenplayState(filePath)
+    if (cachedState) {
+      const maxPos = state.doc.content.size
+      const from = Math.max(1, Math.min(cachedState.selectionFrom, maxPos))
+      const to = Math.max(1, Math.min(cachedState.selectionTo, maxPos))
+      try {
+        state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, from, to)))
+      } catch {
+        state = state.apply(state.tr.setSelection(Selection.near(state.doc.resolve(from))))
+      }
+    }
     const view = new EditorView(mountRef.current, {
       state,
       editable: () => !readonly,
@@ -185,8 +197,10 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
         const newState = view.state.apply(tr)
         view.updateState(newState)
         updateStats(view, newState)
-        setLineType(currentLineType(newState))
+        const nextLineType = currentLineType(newState)
+        setLineType(nextLineType)
         if (!readonly) updateSlashMenu(view)
+        saveViewState(view, newState, nextLineType)
 
         if (!readonly && tr.docChanged) {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -202,14 +216,19 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     })
     viewRef.current = view
     updateStats(view, state)
-    setLineType(currentLineType(state))
+    const initialLineType = cachedState?.lineType ?? currentLineType(state)
+    setLineType(initialLineType)
     if (!readonly) updateSlashMenu(view)
+    requestAnimationFrame(() => {
+      if (scrollRef.current && cachedState) scrollRef.current.scrollTop = cachedState.scrollTop
+    })
     return () => {
+      saveViewState(view, view.state)
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       view.destroy()
       viewRef.current = null
     }
-  }, [diffBlocks, editorRevision, filePath, readonly])
+  }, [diffBlocks, editorRevision, filePath, fileVersion, readonly])
 
   const updateStats = useCallback((view: EditorView, state: EditorState) => {
     setWordCount(state.doc.textContent.length)
@@ -223,6 +242,15 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     if (!viewRef.current) return
     setCurrentLineType(viewRef.current, type)
     setLineType(type)
+  }
+
+  function saveViewState(view: EditorView, state: EditorState, nextLineType = currentLineType(state)) {
+    useEditorViewCacheStore.getState().saveScreenplayState(filePath, {
+      selectionFrom: state.selection.from,
+      selectionTo: state.selection.to,
+      scrollTop: scrollRef.current?.scrollTop ?? 0,
+      lineType: nextLineType
+    })
   }
 
   const snapshotFile = () => {
@@ -289,7 +317,14 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     >
       <div className="pm-editor-main screenplay-main">
         {diffBlocks && <DiffBar fileId={filePath} onAccept={onAccept} onReject={onReject} />}
-        <div className="pm-screenplay-scroll">
+        <div
+          ref={scrollRef}
+          className="pm-screenplay-scroll"
+          onScroll={() => {
+            const view = viewRef.current
+            if (view) saveViewState(view, view.state)
+          }}
+        >
           <div className="pm-paper" style={{ minHeight: pageCount * PAGE_HEIGHT }}>
             <div ref={mountRef} />
             {!readonly && slashMenu && (

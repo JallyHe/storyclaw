@@ -5,6 +5,7 @@
     "electron.vite.config.*",
     "src/types/**/*",
     "src/im/**/*",
+    "src/editors/world/sections.ts",
     "src/editors/screenplay/importer.ts",
     "src/editors/screenplay/markup.ts"
   ],

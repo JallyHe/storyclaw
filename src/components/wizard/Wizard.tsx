@@ -133,7 +133,7 @@ function Step1({ data, setData }: { data: WizardData; setData: (d: Partial<Wizar
 
 function Step2({ data }: { data: WizardData }) {
   const lines = [`《${data.name}》/`, '├── 项目配置.cfg', '├── 大纲/', '│   └── 全剧大纲.md', '├── 剧集/']
-  lines.push('├── 人物/', '│   └── 主角.chr', '├── 设定/', '│   └── 世界观概述.wld', '└── 参考/')
+  lines.push('├── 人物/', '│   └── 主角.chr', '├── 设定/', '│   └── 项目设定.wld', '└── 参考/')
 
   return (
     <div className="wz-field">

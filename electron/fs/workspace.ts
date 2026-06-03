@@ -19,6 +19,7 @@ import type {
   UploadedReference
 } from '../../src/types'
 import { formatImportedScreenplayText } from '../../src/editors/screenplay/importer'
+import { createEmptyWorldSections } from '../../src/editors/world/sections'
 import { parseFile, serializeFile } from './serializer'
 
 // Internal/hidden entries never shown in the explorer
@@ -92,6 +93,7 @@ export async function createWorkspaceFolder(root: string, parentDir: string, nam
 export async function createWorkspaceFile(root: string, parentDir: string, name: string): Promise<string> {
   const parent = assertInsideRoot(root, parentDir)
   const safeName = assertSafeName(name)
+  assertAllowedUserCreatedFile(safeName)
   const target = assertInsideRoot(root, joinPath(parent, safeName))
   await assertMissing(target)
   await fs.writeFile(target, defaultFileContent(safeName), 'utf-8')
@@ -101,6 +103,11 @@ export async function createWorkspaceFile(root: string, parentDir: string, name:
 export async function renameWorkspaceItem(root: string, itemPath: string, nextName: string): Promise<string> {
   const source = assertInsideRoot(root, itemPath)
   const safeName = assertSafeName(nextName)
+  const sourceExt = path.extname(source).slice(1).toLowerCase()
+  const nextExt = path.extname(safeName).slice(1).toLowerCase()
+  if (sourceExt !== 'wld' && nextExt === 'wld') {
+    throw new Error('项目设定文件由系统维护，不能新建额外的 .wld 文件')
+  }
   const target = assertInsideRoot(root, joinPath(dirnamePath(source), safeName))
   await assertMissing(target)
   await fs.rename(source, target)
@@ -157,6 +164,12 @@ function assertSafeName(name: string): string {
   return trimmed
 }
 
+function assertAllowedUserCreatedFile(name: string): void {
+  if (path.extname(name).slice(1).toLowerCase() === 'wld') {
+    throw new Error('项目设定文件由系统维护，不能新建额外的 .wld 文件')
+  }
+}
+
 async function assertMissing(target: string): Promise<void> {
   try {
     await fs.access(target)
@@ -189,7 +202,7 @@ function defaultFileContent(fileName: string): string {
     return serializeFile({ version: 1, name: baseName, role: '', age: 30, gender: '', alias: '', occupation: '', relationship: '', color: '#e0a458', tagline: '', traits: [], arc: '', voice: '', appearsIn: [], background: '', motivation: '', secret: '', appearance: '' })
   }
   if (ext === 'wld') {
-    return serializeFile({ version: 1, title: baseName, body: '' })
+    return serializeFile({ version: 1, title: baseName, sections: createEmptyWorldSections() })
   }
   if (ext === 'cfg') return JSON.stringify(defaultProjectConfig(baseName), null, 2)
   // txt and any other extension → empty file
@@ -443,8 +456,8 @@ export async function scaffoldProject(opts: NewProjectOptions): Promise<string> 
   const chr = serializeFile({ version: 1, name: '主角', role: '主角', age: 30, gender: '', alias: '', occupation: '', relationship: '', color: '#e0a458', tagline: '', traits: [], arc: '', voice: '', appearsIn: [], background: '', motivation: '', secret: '', appearance: '' })
   await fs.writeFile(path.join(root, '人物', '主角.chr'), chr, 'utf-8')
 
-  const wld = serializeFile({ version: 1, title: '世界观概述', body: '' })
-  await fs.writeFile(path.join(root, '设定', '世界观概述.wld'), wld, 'utf-8')
+  const wld = serializeFile({ version: 1, title: '项目设定', sections: createEmptyWorldSections() })
+  await fs.writeFile(path.join(root, '设定', '项目设定.wld'), wld, 'utf-8')
 
   return root
 }

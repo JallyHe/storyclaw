@@ -12,11 +12,12 @@ function statusClass(badge?: string) {
 }
 
 const NODE_MIME = 'application/x-storyclaw-node'
+const PREFETCH_EXTS = new Set(['ep', 'chr', 'wld', 'cfg'])
 
 function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, onNodeDragStart }: {
   node: FileNode; depth: number; isEditing: boolean; editValue: string; onChange: (val: string) => void
   onConfirm: () => void; onCancel: () => void; activeFile: string | null
-  onOpen: (id: string) => void; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void
+  onOpen: (id: string) => void | Promise<void>; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void
   onNodeDragStart: (event: DragEvent, node: TreeNode) => void
 }) {
   const kind = FILE_KIND[node.ext] ?? { icon: Ic.fileScene, color: 'var(--accent)' }
@@ -79,7 +80,7 @@ function EditableFileRow({ node, depth, isEditing, editValue, onChange, onConfir
 function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue, onChange, onConfirm, onCancel, activeFile, onOpen, changedSet, onContext, editingNodeId, onNodeDragStart, onDropToFolder, dragOverId, setDragOverId }: {
   node: FolderNode; depth: number; expanded: Set<string>; toggle: (id: string) => void
   isEditing: boolean; editValue: string; onChange: (val: string) => void; onConfirm: () => void; onCancel: () => void
-  activeFile: string | null; onOpen: (id: string) => void; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void; editingNodeId: string | null
+  activeFile: string | null; onOpen: (id: string) => void | Promise<void>; changedSet: Set<string>; onContext: (event: MouseEvent, node: TreeNode) => void; editingNodeId: string | null
   onNodeDragStart: (event: DragEvent, node: TreeNode) => void
   onDropToFolder: (event: DragEvent, folderId: string) => void
   dragOverId: string | null; setDragOverId: (id: string | null) => void
@@ -156,7 +157,7 @@ function EditableFolderRow({ node, depth, expanded, toggle, isEditing, editValue
 }
 
 export function Explorer({ width }: { width: number }) {
-  const { tree, root, openWorkspace, createFolder, createFile, renameItem, deleteItem, setEditing, updateEditingValue, commitEditing, cancelEditing, copyToClipboard, cutToClipboard, pasteFromClipboard, moveNode, importExternalFiles, refreshTree, editingNodeId, editingValue, clipboard, cutSourceId } = useWorkspaceStore()
+  const { tree, root, openWorkspace, createFolder, createFile, renameItem, deleteItem, setEditing, updateEditingValue, commitEditing, cancelEditing, copyToClipboard, cutToClipboard, pasteFromClipboard, moveNode, importExternalFiles, refreshTree, getFile, editingNodeId, editingValue, clipboard, cutSourceId } = useWorkspaceStore()
   const activeFile = useTabsStore(s => s.activeFile)
   const openTabs = useTabsStore(s => s.openTabs)
   const openTab = useTabsStore(s => s.openTab)
@@ -222,6 +223,14 @@ export function Explorer({ width }: { width: number }) {
     setMenu({ x: event.clientX, y: event.clientY, node })
   }
 
+  const openFile = useCallback(async (path: string) => {
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    if (PREFETCH_EXTS.has(ext)) {
+      await getFile(path).catch(() => {})
+    }
+    openTab(path)
+  }, [getFile, openTab])
+
   const parentDirFor = (node: TreeNode | null) => {
     if (!root) return ''
     if (!node) return root
@@ -272,12 +281,12 @@ export function Explorer({ width }: { width: number }) {
 
   const handleCopy = (node: TreeNode) => {
     copyToClipboard([node])
-    void workspaceIpc.writeClipboardFilePaths([node.id]).catch(err => console.error('Write clipboard failed:', err))
+    void workspaceIpc.writeClipboardFilePaths([node.id], 'copy').catch(err => console.error('Write clipboard failed:', err))
   }
 
   const handleCut = (node: TreeNode) => {
     cutToClipboard([node])
-    void workspaceIpc.writeClipboardFilePaths([node.id]).catch(err => console.error('Write clipboard failed:', err))
+    void workspaceIpc.writeClipboardFilePaths([node.id], 'cut').catch(err => console.error('Write clipboard failed:', err))
   }
 
   const handlePaste = async (targetDir: string) => {
@@ -392,7 +401,7 @@ export function Explorer({ width }: { width: number }) {
             onConfirm={commitEditing}
             onCancel={cancelEditing}
             activeFile={activeFile}
-            onOpen={openTab}
+            onOpen={openFile}
             changedSet={changedSet}
             onContext={handleContext}
             editingNodeId={editingNodeId}
@@ -414,7 +423,7 @@ export function Explorer({ width }: { width: number }) {
             onConfirm={commitEditing}
             onCancel={cancelEditing}
             activeFile={activeFile}
-            onOpen={openTab}
+            onOpen={openFile}
             changedSet={changedSet}
             onContext={handleContext}
             onNodeDragStart={handleNodeDragStart}
@@ -487,7 +496,6 @@ export function Explorer({ width }: { width: number }) {
                 <button onClick={() => { requestNewFile(parentDirFor(menu.node), '新建分集大纲.md'); setMenu(null) }}>分集大纲 (.md)</button>
                 <button onClick={() => { requestNewFile(parentDirFor(menu.node), '新建剧本.ep'); setMenu(null) }}>剧本 (.ep)</button>
                 <button onClick={() => { requestNewFile(parentDirFor(menu.node), '新建人物.chr'); setMenu(null) }}>人物 (.chr)</button>
-                <button onClick={() => { requestNewFile(parentDirFor(menu.node), '新建设定.wld'); setMenu(null) }}>设定 (.wld)</button>
                 <button onClick={() => { requestNewFile(parentDirFor(menu.node), '新建文本.txt'); setMenu(null) }}>文本 (.txt)</button>
                 <button onClick={() => { requestNewFolder(parentDirFor(menu.node)); setMenu(null) }}>新建文件夹</button>
               </div>

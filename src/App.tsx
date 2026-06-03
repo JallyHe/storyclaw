@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useUiStore, useTabsStore, useWorkspaceStore, useSessionsStore } from '@/store'
 import { imIpc } from '@/ipc/im'
 import { Titlebar } from '@/components/shell/Titlebar'
@@ -16,6 +16,7 @@ import { AgentView } from '@/components/agent/AgentView'
 import { Wizard } from '@/components/wizard/Wizard'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { useAgentPersistence } from '@/hooks/useAgentPersistence'
+import { updateEditorKeepAliveList } from '@/components/editors/editorKeepAlive'
 
 export default function App() {
   useAgentPersistence()
@@ -25,8 +26,10 @@ export default function App() {
     copilotWidth, setCopilotWidth
   } = useUiStore()
   const activeFile = useTabsStore(s => s.activeFile)
+  const openTabs = useTabsStore(s => s.openTabs)
   const root = useWorkspaceStore(s => s.root)
   const [showWizard, setShowWizard] = useState(false)
+  const [mountedEditors, setMountedEditors] = useState<string[]>([])
 
   // track recently opened workspaces
   useEffect(() => {
@@ -36,6 +39,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  useLayoutEffect(() => {
+    setMountedEditors(current => updateEditorKeepAliveList(current, activeFile, openTabs))
+  }, [activeFile, openTabs])
 
   // 全局订阅机器人会话事件：并入现有会话列表（标记为 imbot，桌面端只读）
   useEffect(() => {
@@ -103,13 +110,25 @@ export default function App() {
                   <TabBar />
                   <Breadcrumb />
                   {activeFile
-                    ? <FileEditor key={activeFile} filePath={activeFile} />
+                    ? mountedEditors.map(filePath => (
+                        <div
+                          key={filePath}
+                          style={{
+                            flex: 1,
+                            minHeight: 0,
+                            display: filePath === activeFile ? 'flex' : 'none',
+                            flexDirection: 'column'
+                          }}
+                        >
+                          <FileEditor filePath={filePath} />
+                        </div>
+                      ))
                     : (
                       <div className="empty-editor">
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: 13, marginBottom: 6 }}>从左侧文件树打开文件</div>
                           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                            支持 .ep · .chr · .md · .wld
+                            支持 .ep · .chr · .md · 项目设定
                           </div>
                         </div>
                       </div>

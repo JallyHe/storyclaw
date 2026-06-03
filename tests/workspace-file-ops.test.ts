@@ -43,4 +43,8 @@ describe('workspace file operations', () => {
   it('rejects path traversal for create targets', async () => {
     await expect(createWorkspaceFile(root, root, '../逃逸.ep')).rejects.toThrow('名称不能包含路径分隔符')
   })
+
+  it('does not allow users to create additional world setting files', async () => {
+    await expect(createWorkspaceFile(root, root, '新建设定.wld')).rejects.toThrow('项目设定文件由系统维护')
+  })
 })

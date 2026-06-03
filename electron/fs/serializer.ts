@@ -1,5 +1,6 @@
 import type { EpFile, ChrFile, WldFile, StoryFile, FileExt, ProjectConfigFile } from '../../src/types'
 import { parseScreenplayMarkup, serializeScreenplayMarkup } from '../../src/editors/screenplay/markup'
+import { createEmptyWorldSections } from '../../src/editors/world/sections'
 
 export function parseFile(ext: FileExt, raw: string): StoryFile {
   switch (ext) {
@@ -54,7 +55,11 @@ function validateChr(d: unknown): ChrFile {
 
 function validateWld(d: unknown): WldFile {
   const o = d as WldFile
-  return { version: 1, title: o.title ?? '', body: o.body ?? '' }
+  return {
+    version: 1,
+    title: o.title ?? '',
+    sections: createEmptyWorldSections(o.sections)
+  }
 }
 
 function validateProjectConfig(d: unknown): ProjectConfigFile {

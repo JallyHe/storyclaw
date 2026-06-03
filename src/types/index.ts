@@ -1,4 +1,5 @@
 // ─── File format types ────────────────────────────────────────────────────────
+import type { WorldSections } from '../editors/world/sections'
 
 export type BlockType = 'scene' | 'action' | 'character' | 'dialogue' | 'paren' | 'transition'
 
@@ -28,7 +29,7 @@ export interface ChrFile {
   background?: string; motivation?: string; secret?: string; appearance?: string
 }
 
-export interface WldFile { version: 1; title: string; body: string }
+export interface WldFile { version: 1; title: string; sections: WorldSections }
 
 export type ProjectType = 'film' | 'series' | 'short'
 export type ScreenplayLayout = 'single-file-multi-episode' | 'one-file-per-episode' | 'single-film-file'

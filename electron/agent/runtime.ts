@@ -35,7 +35,7 @@ const BASE_SYSTEM_PROMPT = `你是 StoryClaw 的 AI 剧本创作助手。
   - 其他普通段落默认视为动作描述
   - 不要输出连续空白行；块之间最多 1 个空行；不要用 Markdown 列表写剧本正文
 - .chr 文件（人物卡）：只输出完整 JSON，字段至少包含 version/name/role/age/color/tagline/traits/arc/voice/appearsIn
-- .wld 文件（设定文档）：只输出完整 JSON，字段为 version/title/body，body 内可写 Markdown 文本
+- .wld 文件（项目唯一设定总表）：只输出完整 JSON，字段为 version/title/sections；sections 必须包含 premise、timeAndPlace、rules、socialRelations、keySpaces、backstoryAndMaterials 六个 Markdown 字符串分区
 - 项目配置.cfg：根目录项目配置 JSON，字段包含 name/type/genre/synopsis/episodes/episodeDurationMinutes/screenplayLayout。创作前应优先遵循它；短剧默认用单个 .ep 包含多集，电视剧默认一集一个 .ep，电影默认单个电影剧本文件。
 
 ## 工具使用规则

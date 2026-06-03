@@ -1,6 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, dialog, clipboard } from 'electron'
 import type { Event } from 'electron'
-import fs from 'node:fs'
 import * as path from 'path'
 import { is } from '@electron-toolkit/utils'
 import {
@@ -43,6 +42,16 @@ import { loadIMConfig } from './im/config'
 import { loadConversations, saveConversations } from './im/conversations'
 import type { IMConfigSnapshot, IMPlatform } from '../src/im/types'
 import {
+  createFileNameW,
+  createPreferredDropEffect,
+  createWindowsDropFiles,
+  normalizeClipboardPaths,
+  parseClipboardTextPaths,
+  parseWindowsDropFiles,
+  splitNullTerminatedPaths,
+  type ClipboardFileOperation
+} from './desktop/clipboardFiles'
+import {
   compareVersions,
   compareWorkingFile,
   createVersionLine,
@@ -55,52 +64,6 @@ import {
 export let win: BrowserWindow | null = null
 let stopWatch: (() => void) | null = null
 const appIconPath = path.join(__dirname, '../assets/storyclaw-logo.png')
-
-function normalizeClipboardPaths(paths: string[]): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const raw of paths) {
-    const cleaned = raw.trim().replace(/^file:\/\//i, '')
-    if (!cleaned) continue
-    const normalized = path.normalize(decodeURIComponent(cleaned))
-    const key = process.platform === 'win32' ? normalized.toLowerCase() : normalized
-    if (seen.has(key)) continue
-    seen.add(key)
-    if (fs.existsSync(normalized)) out.push(normalized)
-  }
-  return out
-}
-
-function splitNullTerminatedPaths(text: string): string[] {
-  return text.split('\0').map(item => item.trim()).filter(Boolean)
-}
-
-function parseWindowsDropFiles(buffer: Buffer): string[] {
-  if (buffer.length < 20) return []
-  const offset = buffer.readUInt32LE(0)
-  if (offset <= 0 || offset >= buffer.length) return []
-  const wide = buffer.readUInt32LE(16) !== 0
-  const raw = wide
-    ? buffer.subarray(offset).toString('utf16le')
-    : buffer.subarray(offset).toString('latin1')
-  return splitNullTerminatedPaths(raw)
-}
-
-function parseClipboardTextPaths(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .map(item => item.trim().replace(/^"|"$/g, ''))
-    .filter(Boolean)
-}
-
-function createWindowsDropFiles(paths: string[]): Buffer {
-  const list = `${paths.join('\0')}\0\0`
-  const body = Buffer.from(list, 'utf16le')
-  const header = Buffer.alloc(20)
-  header.writeUInt32LE(20, 0)
-  header.writeUInt32LE(1, 16)
-  return Buffer.concat([header, body])
-}
 
 function readClipboardFilePaths(): string[] {
   const formats = clipboard.availableFormats()
@@ -117,13 +80,14 @@ function readClipboardFilePaths(): string[] {
   return normalizeClipboardPaths(paths)
 }
 
-function writeClipboardFilePaths(paths: string[]): void {
+function writeClipboardFilePaths(paths: string[], operation: ClipboardFileOperation = 'copy'): void {
   const normalized = normalizeClipboardPaths(paths)
   if (normalized.length === 0) return
   clipboard.writeText(normalized.join('\n'))
   if (process.platform === 'win32') {
-    clipboard.writeBuffer('FileNameW', Buffer.from(`${normalized[0]}\0`, 'utf16le'))
+    clipboard.writeBuffer('FileNameW', createFileNameW(normalized))
     clipboard.writeBuffer('CF_HDROP', createWindowsDropFiles(normalized))
+    clipboard.writeBuffer('Preferred DropEffect', createPreferredDropEffect(operation))
   }
 }
 
@@ -365,8 +329,8 @@ ipcMain.handle('workspace:readClipboardFilePaths', async () => {
   return readClipboardFilePaths()
 })
 
-ipcMain.handle('workspace:writeClipboardFilePaths', async (_e, paths: string[]) => {
-  writeClipboardFilePaths(paths)
+ipcMain.handle('workspace:writeClipboardFilePaths', async (_e, paths: string[], operation?: ClipboardFileOperation) => {
+  writeClipboardFilePaths(paths, operation)
 })
 
 ipcMain.handle('workspace:revealInExplorer', async (_e, filePath: string) => {

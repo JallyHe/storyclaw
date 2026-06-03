@@ -40,7 +40,7 @@ interface Window {
         importFiles(root: string, sourcePaths: string[], targetDir: string): Promise<Array<{ absPath: string; relPath: string; name: string }>>
         importScreenplays(root: string, targetDir: string): Promise<UploadedReference[]>
         readClipboardFilePaths(): Promise<string[]>
-        writeClipboardFilePaths(paths: string[]): Promise<void>
+        writeClipboardFilePaths(paths: string[], operation?: 'copy' | 'cut'): Promise<void>
         applyDefaultContent(filePath: string): Promise<void>
         search(root: string, query: string, opts: unknown): Promise<unknown>
         replaceInFile(filePath: string, query: string, replacement: string, opts: unknown): Promise<number>

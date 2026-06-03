@@ -33,8 +33,8 @@ export const workspaceIpc = {
     getApi().workspace.importScreenplays(root, targetDir),
   readClipboardFilePaths: (): Promise<string[]> =>
     getApi().workspace.readClipboardFilePaths(),
-  writeClipboardFilePaths: (paths: string[]): Promise<void> =>
-    getApi().workspace.writeClipboardFilePaths(paths),
+  writeClipboardFilePaths: (paths: string[], operation?: 'copy' | 'cut'): Promise<void> =>
+    getApi().workspace.writeClipboardFilePaths(paths, operation),
   applyDefaultContent: (filePath: string): Promise<void> =>
     getApi().workspace.applyDefaultContent(filePath),
   search: (root: string, query: string, opts: SearchOptions): Promise<FileSearchResult[]> =>

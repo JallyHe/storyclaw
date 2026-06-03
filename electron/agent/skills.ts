@@ -71,7 +71,7 @@ interface QAResult {
 /** 根据 Agent 类型确定期望的输出格式标记 */
 const EXPECTED_FORMAT_MARKERS: Partial<Record<AgentName, string[]>> = {
   'character-designer': ['name', 'role', 'traits'],        // .chr JSON 关键字段
-  'worldbuilder': ['title', 'body'],                        // .wld JSON 关键字段
+  'worldbuilder': ['title', 'sections'],                    // .wld JSON 关键字段
   'story-architect': ['#', '##'],                           // Markdown 大纲
   'episode-outliner': ['#', '##'],                          // Markdown 大纲
   'scene-writer': ['@episode', '@title', '@status'],        // .ep 剧本标记
