@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WldFile } from '@/types'
-import { useWorkspaceStore } from '@/store'
+import { useEditorSaveStore, useWorkspaceStore } from '@/store'
 import { Ic } from '@/components/icons'
 import {
   RichTextEditor,
@@ -14,34 +14,54 @@ interface Props { filePath: string; file: WldFile }
 export function WorldEditor({ filePath, file }: Props) {
   const [data, setData] = useState(file)
   const dataRef = useRef(file)
-  const { saveFile, markDirty } = useWorkspaceStore()
+  const savedRef = useRef(file)
+  const { saveFile, markDirty, clearDirty } = useWorkspaceStore()
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
 
   useEffect(() => {
     dataRef.current = file
+    savedRef.current = file
     setData(file)
-  }, [file])
+    clearDirty(filePath)
+  }, [clearDirty, file, filePath])
 
-  const persist = useCallback(async (updated: WldFile) => {
+  const saveNow = useCallback(async (updated = dataRef.current) => {
+    await saveFile(filePath, updated)
+    savedRef.current = updated
+    clearDirty(filePath)
+  }, [clearDirty, filePath, saveFile])
+
+  useEffect(() => registerSaveHandler(filePath, {
+    save: () => saveNow(),
+    discard: () => {
+      dataRef.current = savedRef.current
+      setData(savedRef.current)
+      clearDirty(filePath)
+    }
+  }), [clearDirty, filePath, registerSaveHandler, saveNow])
+
+  const updateDraft = useCallback(async (updated: WldFile) => {
     dataRef.current = updated
     setData(updated)
     markDirty(filePath)
-    await saveFile(filePath, updated)
-  }, [filePath, markDirty, saveFile])
+    if (autoSave) await saveNow(updated)
+  }, [autoSave, filePath, markDirty, saveNow])
 
   const saveTitle = useCallback((title: string) => {
-    void persist({ ...dataRef.current, title })
-  }, [persist])
+    void updateDraft({ ...dataRef.current, title })
+  }, [updateDraft])
 
   const saveSection = useCallback((key: WorldSectionKey, value: string) => {
     const current = dataRef.current
-    void persist({
+    void updateDraft({
       ...current,
       sections: {
         ...current.sections,
         [key]: value
       }
     })
-  }, [persist])
+  }, [updateDraft])
 
   return (
     <div className="world-editor-scroll">

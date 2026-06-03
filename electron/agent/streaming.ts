@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 
 const TOOL_LABELS: Record<string, string> = {
   read_screenplay:  '读取剧本文件',
+  read_selection:   '读取选区文本',
   write_screenplay: '修改剧本文件',
   list_workspace:   '列出工作区',
   read_reference:   '读取参考资料',

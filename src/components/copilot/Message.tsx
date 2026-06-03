@@ -97,6 +97,7 @@ function UserBubble({ text }: { text: string }) {
 
 const TOOL_ICO: Record<string, React.FC<any>> = {
   read_screenplay:  Ic.read,
+  read_selection:   Ic.read,
   read_reference:   Ic.read,
   list_workspace:   Ic.list,
   write_screenplay: Ic.edit,
@@ -107,6 +108,7 @@ const TOOL_ICO: Record<string, React.FC<any>> = {
 
 const TOOL_COLOR: Record<string, string> = {
   read_screenplay:  'var(--accent)',
+  read_selection:   'var(--accent)',
   read_reference:   'var(--accent)',
   list_workspace:   'var(--text-2)',
   write_screenplay: 'var(--accent-ai)',

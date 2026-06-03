@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
-import { useUiStore, useTabsStore, useWorkspaceStore, useSessionsStore } from '@/store'
+import { requestUnsavedDocumentAction, useEditorSaveStore, useUiStore, useTabsStore, useWorkspaceStore, useSessionsStore } from '@/store'
 import { imIpc } from '@/ipc/im'
 import { Titlebar } from '@/components/shell/Titlebar'
 import { ActivityBar } from '@/components/shell/ActivityBar'
@@ -43,6 +43,36 @@ export default function App() {
   useLayoutEffect(() => {
     setMountedEditors(current => updateEditorKeepAliveList(current, activeFile, openTabs))
   }, [activeFile, openTabs])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSave = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's'
+      if (!isSave || !activeFile) return
+      event.preventDefault()
+      void useEditorSaveStore.getState().saveDocument(activeFile)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeFile])
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (useWorkspaceStore.getState().dirtySet.size === 0) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
+  useEffect(() => {
+    return window.api?.window.onCloseRequest?.(async () => {
+      const tabs = useTabsStore.getState().openTabs
+      if (await requestUnsavedDocumentAction(tabs)) {
+        await window.api?.window.confirmClose?.()
+      }
+    })
+  }, [])
 
   // 全局订阅机器人会话事件：并入现有会话列表（标记为 imbot，桌面端只读）
   useEffect(() => {

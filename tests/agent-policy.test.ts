@@ -8,6 +8,7 @@ describe('agent mode policy', () => {
     expect(config.allowedTools).toEqual([
       'list_workspace',
       'read_screenplay',
+      'read_selection',
       'read_reference',
       'write_screenplay',
       'spawn_subagent'
@@ -25,6 +26,7 @@ describe('agent mode policy', () => {
     expect(getModeConfig('plan').allowedTools).toEqual([
       'list_workspace',
       'read_screenplay',
+      'read_selection',
       'read_reference'
     ])
     expect(() => assertToolAllowed('plan', 'write_screenplay')).toThrow(/Plan mode/)
@@ -34,6 +36,7 @@ describe('agent mode policy', () => {
     expect(getModeConfig('ask').allowedTools).toEqual([
       'list_workspace',
       'read_screenplay',
+      'read_selection',
       'read_reference'
     ])
     expect(getModeConfig('ask').systemSuffix).toContain('只回答问题')

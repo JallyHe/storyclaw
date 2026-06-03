@@ -421,6 +421,21 @@ body.resizing, body.resizing * { cursor: col-resize !important; }
 .qa:hover { border-color: var(--accent); color: var(--text-0); background: var(--bg-3); }
 .qa svg { width: 13px; height: 13px; color: var(--accent); }
 .qa:disabled { opacity: .5; cursor: not-allowed; }
+.cp-changes-summary { flex: none; margin: 8px 10px 0; border: 1px solid color-mix(in srgb, var(--accent-ai) 22%, var(--border)); border-radius: 9px; background: color-mix(in srgb, var(--accent-ai) 7%, var(--bg-1)); overflow: hidden; }
+.cp-changes-head { width: 100%; min-height: 31px; display: flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--text-1); font-size: 12px; text-align: left; }
+.cp-changes-head svg { color: var(--accent-ai); flex: none; }
+.cp-changes-head > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-changes-stat { display: inline-flex; align-items: center; gap: 5px; flex: none; font-family: "JetBrains Mono", monospace; font-size: 11px; }
+.cp-changes-stat .add, .cp-change-preview .add { color: var(--diff-add-fg); }
+.cp-changes-stat .del, .cp-change-preview .del { color: var(--diff-del-fg); }
+.cp-changes-list { display: flex; flex-direction: column; gap: 4px; padding: 0 6px 6px; }
+.cp-change-file { width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 7px; border-radius: 7px; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text-1); text-align: left; }
+.cp-change-file:hover { border-color: var(--accent-ai); color: var(--text-0); }
+.cp-change-file-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cp-change-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.cp-change-preview { display: flex; flex-direction: column; gap: 2px; max-height: 68px; overflow: hidden; font-family: var(--script-font); font-size: 11px; line-height: 1.35; }
+.cp-change-preview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-change-accept-all { align-self: flex-end; height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border-radius: 7px; background: var(--accent-ai); color: var(--bg-0); font-size: 11.5px; font-weight: 700; }
 .cp-composer { flex: none; padding: 12px 14px 14px; border-top: 1px solid var(--border-soft); }
 
 /* ── Messages ────────────────────────────────────────────── */

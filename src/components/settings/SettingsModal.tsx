@@ -2,11 +2,13 @@ import { useEffect } from 'react'
 import { useUiStore, type SettingsTab } from '@/store'
 import { Ic } from '@/components/icons'
 import { ModelSettingsPanel } from './ModelSettingsPanel'
+import { EditorSettingsPanel } from './EditorSettingsPanel'
 import { IntegrationsPanel } from './IntegrationsPanel'
 import './settings.css'
 
 const NAV: Array<{ id: SettingsTab; label: string; icon: keyof typeof Ic }> = [
   { id: 'model', label: '模型', icon: 'cube' },
+  { id: 'editor', label: '编辑器', icon: 'edit' },
   { id: 'integrations', label: '接入平台', icon: 'robot' }
 ]
 
@@ -46,6 +48,7 @@ export function SettingsModal() {
             <Ic.x width={16} height={16} />
           </button>
           {settingsTab === 'model' && <ModelSettingsPanel />}
+          {settingsTab === 'editor' && <EditorSettingsPanel />}
           {settingsTab === 'integrations' && <IntegrationsPanel />}
         </div>
       </div>

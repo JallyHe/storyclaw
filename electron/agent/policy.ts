@@ -4,8 +4,12 @@ import type { AgentMode } from '../../src/types'
 export const WORKSPACE_TOOL_NAMES = [
   'list_workspace',
   'read_screenplay',
+  'read_selection',
   'read_reference',
-  'write_screenplay'
+  'write_screenplay',
+  'match_screenplay_format',
+  'apply_format_template',
+  'save_format_template'
 ] as const
 
 /** 主会话暴露的全部工具（含阶段专家子代理派发工具）。 */
@@ -25,13 +29,18 @@ export interface AgentModeConfig {
 const READ_ONLY_TOOLS: StoryClawToolName[] = [
   'list_workspace',
   'read_screenplay',
-  'read_reference'
+  'read_selection',
+  'read_reference',
+  // 格式匹配/试跑只产出文本、不写文件，各模式均可用
+  'match_screenplay_format',
+  'apply_format_template'
 ]
 
 const MODE_CONFIG: Record<AgentMode, AgentModeConfig> = {
   craft: {
     mode: 'craft',
-    allowedTools: [...READ_ONLY_TOOLS, 'write_screenplay', 'spawn_subagent'],
+    // save_format_template 持久化学到的模板，仅 Craft 允许
+    allowedTools: [...READ_ONLY_TOOLS, 'write_screenplay', 'spawn_subagent', 'save_format_template'],
     systemSuffix: '当前模式：Craft。可以读取资料并生成剧本改动，必须通过 write_screenplay 生成待审核 diff；可通过 spawn_subagent 调度各阶段专家子代理。'
   },
   plan: {

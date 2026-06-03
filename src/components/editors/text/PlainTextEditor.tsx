@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { FindHandlers } from '@/components/editors/FindBar'
 import { workspaceIpc } from '@/ipc/workspace'
-import { useTabsStore } from '@/store'
+import { useEditorSaveStore, useTabsStore, useWorkspaceStore } from '@/store'
 import { DocumentEditorShell } from '@/components/editors/DocumentEditorShell'
 import './plaintext.css'
 
@@ -13,6 +13,8 @@ export function PlainTextEditor({ filePath }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const textRef = useRef('')
+  const savedTextRef = useRef('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const matchesRef = useRef<Array<{ start: number; end: number }>>([])
   const currentMatchRef = useRef(0)
@@ -20,16 +22,53 @@ export function PlainTextEditor({ filePath }: Props) {
 
   const revealTarget = useTabsStore(s => s.revealTarget)
   const consumeReveal = useTabsStore(s => s.consumeReveal)
+  const markDirty = useWorkspaceStore(s => s.markDirty)
+  const clearDirty = useWorkspaceStore(s => s.clearDirty)
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
     setDirty(false)
     workspaceIpc.readText(filePath)
-      .then(t => { setText(t); setLoading(false) })
+      .then(t => {
+        textRef.current = t
+        savedTextRef.current = t
+        setText(t)
+        clearDirty(filePath)
+        setLoading(false)
+      })
       .catch(err => { setError(err?.message ?? '无法读取文件'); setLoading(false) })
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [filePath])
+  }, [clearDirty, filePath])
+
+  const saveNow = useCallback(async (value = textRef.current) => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    await workspaceIpc.writeText(filePath, value)
+    savedTextRef.current = value
+    clearDirty(filePath)
+    setDirty(false)
+  }, [clearDirty, filePath])
+
+  useEffect(() => {
+    return registerSaveHandler(filePath, {
+      save: () => saveNow(),
+      discard: () => {
+        if (saveTimer.current) {
+          clearTimeout(saveTimer.current)
+          saveTimer.current = null
+        }
+        textRef.current = savedTextRef.current
+        setText(savedTextRef.current)
+        setDirty(false)
+        clearDirty(filePath)
+      }
+    })
+  }, [clearDirty, filePath, registerSaveHandler, saveNow])
 
   // Reveal & select the matched line when navigated from search
   useEffect(() => {
@@ -61,18 +100,19 @@ export function PlainTextEditor({ filePath }: Props) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
-        await workspaceIpc.writeText(filePath, value)
-        setDirty(false)
+        await saveNow(value)
       } catch (err) {
         console.error('Save failed:', err)
       }
     }, 500)
-  }, [filePath])
+  }, [saveNow])
 
   const onChange = (value: string) => {
+    textRef.current = value
     setText(value)
     setDirty(true)
-    scheduleSave(value)
+    markDirty(filePath)
+    if (autoSave) scheduleSave(value)
   }
 
   const findHandlers = useMemo<FindHandlers>(() => ({

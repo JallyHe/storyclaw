@@ -118,9 +118,17 @@ const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggleMaximize'),
     close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    confirmClose: (): Promise<void> => ipcRenderer.invoke('window:confirmClose'),
+    confirmUnsaved: (fileNames: string[]): Promise<'save' | 'discard' | 'cancel'> =>
+      ipcRenderer.invoke('window:confirmUnsaved', fileNames),
     show: (): Promise<void> => ipcRenderer.invoke('window:show'),
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
     toggleDevTools: (): Promise<void> => ipcRenderer.invoke('window:toggleDevTools'),
+    onCloseRequest: (cb: () => void | Promise<void>) => {
+      const listener = () => { void cb() }
+      ipcRenderer.on('window:close-request', listener)
+      return () => ipcRenderer.removeListener('window:close-request', listener)
+    },
     onMaximizedChange: (cb: (isMaximized: boolean) => void) => {
       ipcRenderer.on('window:maximized-change', (_e, isMaximized) => cb(isMaximized))
       return () => ipcRenderer.removeAllListeners('window:maximized-change')

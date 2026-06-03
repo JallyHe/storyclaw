@@ -75,9 +75,8 @@ export function buildSelectionPromptContext(text: string): string {
       `  - ProseMirror 位置：${ref.from}-${ref.to}`,
       ref.startBlockId ? `  - 起始块：${ref.startBlockType ?? 'block'}#${ref.startBlockId}` : '',
       ref.endBlockId ? `  - 结束块：${ref.endBlockType ?? 'block'}#${ref.endBlockId}` : '',
-      `  - 按需读取：需要正文时先调用 read_screenplay 读取 "${ref.relPath}"，再按块 id 或位置定位。`
+      `  - 按需读取：需要正文时先调用 read_selection，参数 path="${ref.relPath}", from=${ref.from}, to=${ref.to}。`
     ].filter(Boolean).join('\n')),
     '- 注意：用户消息里的 @selection 只代表位置引用，不包含被选中文本正文；不要假设已读取选区内容。'
   ].join('\n')
 }
-

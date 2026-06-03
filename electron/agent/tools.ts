@@ -5,7 +5,7 @@ import { Type } from '@sinclair/typebox'
 import { buildTree, readStoryFile, readTextFile } from '../fs/workspace'
 import { parseFile } from '../fs/serializer'
 import type { BrowserWindow } from 'electron'
-import type { AgentMode, AgentPermission, Block, StoryFile, DiffBlock } from '../../src/types'
+import type { AgentMode, AgentPermission, Block, EpFile, StoryFile, DiffBlock } from '../../src/types'
 import { assertToolAllowed } from './policy'
 
 let workspaceRoot = ''
@@ -46,7 +46,39 @@ function requireString(value: string | undefined, name: string): string {
   return value
 }
 
+function clampSelection(from: number, to: number, size: number) {
+  const start = Math.max(0, Math.min(Math.floor(from), size))
+  const end = Math.max(start, Math.min(Math.floor(to), size))
+  return { start, end }
+}
 
+export function readSelectionTextFromRaw(raw: string, ext: string, from: number, to: number): string {
+  if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('from/to must be numbers')
+  const normalizedExt = ext.toLowerCase()
+  if (normalizedExt === 'ep') {
+    const file = parseFile('ep' as any, raw) as EpFile
+    const text = screenplayPlainText(file)
+    const { start, end } = clampSelection(from, to, text.length)
+    return text.slice(start, end).trim()
+  }
+  const { start, end } = clampSelection(from, to, raw.length)
+  return raw.slice(start, end).trim()
+}
+
+function screenplayPlainText(file: EpFile): string {
+  const episodes = file.episodes && file.episodes.length > 1 ? file.episodes : [file]
+  return episodes.map(episode => {
+    const title = [episode.episode, episode.title].filter(Boolean).join(' ')
+    const body = episode.blocks.map(blockText).filter(Boolean).join('\n\n')
+    return [title, body].filter(Boolean).join('\n\n')
+  }).join('\n\n')
+}
+
+function blockText(block: Block): string {
+  if (block.type === 'scene') return [`第 ${block.number} 场`, block.location, block.intext, block.time].filter(Boolean).join(' ')
+  if (block.type === 'character') return block.ext ? `${block.name}（${block.ext}）` : block.name
+  return block.text
+}
 
 function computeBlockDiff(oldFile: StoryFile, newFile: StoryFile): DiffBlock[] {
   if (!('blocks' in oldFile) || !('blocks' in newFile)) return []
@@ -93,6 +125,32 @@ export const readScreenplay = defineTool({
 
     const data = await readStoryFile(abs)
     return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }], details: {} }
+  }
+})
+
+export const readSelection = defineTool({
+  name: 'read_selection',
+  label: '读取选区文本',
+  description: `按用户提供的坐标读取工作区文档片段。
+- .ep 剧本：from/to 使用 ProseMirror 位置坐标
+- .md 大纲：from/to 使用文本坐标
+用于 @selection 选区引用，不要自行猜测选区正文。`,
+  parameters: Type.Object({
+    path: Type.String({ description: '相对于工作区根目录的路径，例如 剧集/EP01.ep 或 大纲/全剧大纲.md' }),
+    from: Type.Number({ description: '起始坐标' }),
+    to: Type.Number({ description: '结束坐标' })
+  }),
+  execute: async (_id, { path: relPath, from, to }) => {
+    assertToolAllowed(currentMode, 'read_selection')
+    const abs = resolveWorkspacePath(requireString(relPath, 'path'))
+    const ext = path.extname(abs).slice(1).toLowerCase()
+    const raw = await fs.readFile(abs, 'utf-8').catch(() => '')
+    let text = readSelectionTextFromRaw(raw, ext, Number(from), Number(to))
+    if (text.length > 6000) text = text.slice(0, 6000) + '\n...（选区内容已截断）'
+    return {
+      content: [{ type: 'text' as const, text: text || '（选区为空或坐标无对应文本）' }],
+      details: { path: relPath, from, to, ext }
+    }
   }
 })
 
@@ -176,4 +234,6 @@ export const readReference = defineTool({
   }
 })
 
-export const ALL_TOOLS = [readScreenplay, writeScreenplay, listWorkspace, readReference]
+import { FORMAT_TOOLS } from './formatTools'
+
+export const ALL_TOOLS = [readScreenplay, readSelection, writeScreenplay, listWorkspace, readReference, ...FORMAT_TOOLS]

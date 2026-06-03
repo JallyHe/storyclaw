@@ -7,6 +7,19 @@ describe('rich text markdown conversion', () => {
     expect(richTextDocToMarkdown(markdownToRichTextDoc(markdown))).toBe(markdown)
   })
 
+  it('does not emit trailing spaces when saving markdown rich text', () => {
+    const markdown = richTextDocToMarkdown({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: '标题' }] },
+        { type: 'paragraph' },
+        { type: 'bullet_item', content: [{ type: 'text', text: '条目' }] }
+      ]
+    })
+
+    expect(markdown.split('\n').filter(line => /[ \t]$/.test(line))).toEqual([])
+  })
+
   it('parses markdown tables even when blank lines appear between rows', () => {
     const markdown = [
       '| 阶段 | 集数 | 暗线进展 | 情绪曲线 |',

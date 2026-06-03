@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FindHandlers } from '@/components/editors/FindBar'
-import { useWorkspaceStore, useTabsStore } from '@/store'
+import { useEditorSaveStore, useWorkspaceStore, useTabsStore } from '@/store'
 import { workspaceIpc } from '@/ipc/workspace'
 import { DocumentEditorShell, type DocOutlineItem } from '@/components/editors/DocumentEditorShell'
 import {
@@ -18,6 +18,8 @@ export function OutlineEditor({ filePath }: Props) {
   const [outlineItems, setOutlineItems] = useState<DocOutlineItem[]>([])
 
   const editorRef = useRef<RichTextEditorHandle | null>(null)
+  const contentRef = useRef('')
+  const savedContentRef = useRef('')
 
   const findHandlers = useMemo<FindHandlers>(() => ({
     find(query, opts) { return editorRef.current?.findInEditor(query, opts) ?? 0 },
@@ -31,14 +33,23 @@ export function OutlineEditor({ filePath }: Props) {
   }), [])
   const revealTarget = useTabsStore(s => s.revealTarget)
   const consumeReveal = useTabsStore(s => s.consumeReveal)
+  const markDirty = useWorkspaceStore(s => s.markDirty)
+  const clearDirty = useWorkspaceStore(s => s.clearDirty)
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
   // Track external writes (AI agent) so the editor reloads
   const fileVersion = useWorkspaceStore(s => s.fileVersions.get(filePath) ?? 0)
 
   useEffect(() => {
     workspaceIpc.readText(filePath)
-      .then(text => setContent(text))
+      .then(text => {
+        contentRef.current = text
+        savedContentRef.current = text
+        setContent(text)
+        clearDirty(filePath)
+      })
       .catch(() => setContent(''))
-  }, [filePath, fileVersion])
+  }, [clearDirty, filePath, fileVersion])
 
   useEffect(() => {
     if (!revealTarget || revealTarget.path !== filePath) return
@@ -49,10 +60,29 @@ export function OutlineEditor({ filePath }: Props) {
     return () => clearTimeout(timer)
   }, [revealTarget, filePath, consumeReveal])
 
-  const save = useCallback(async (markdown: string) => {
-    setContent(markdown)
+  const saveNow = useCallback(async (markdown = contentRef.current) => {
     await workspaceIpc.writeText(filePath, markdown)
-  }, [filePath])
+    savedContentRef.current = markdown
+    clearDirty(filePath)
+  }, [clearDirty, filePath])
+
+  useEffect(() => {
+    return registerSaveHandler(filePath, {
+      save: () => saveNow(),
+      discard: () => {
+        contentRef.current = savedContentRef.current
+        setContent(savedContentRef.current)
+        clearDirty(filePath)
+      }
+    })
+  }, [clearDirty, filePath, registerSaveHandler, saveNow])
+
+  const handleChange = useCallback(async (markdown: string) => {
+    contentRef.current = markdown
+    setContent(markdown)
+    markDirty(filePath)
+    if (autoSave) await saveNow(markdown)
+  }, [autoSave, filePath, markDirty, saveNow])
 
   const handleHeadingsChange = useCallback((headings: RichTextHeading[]) => {
     setOutlineItems(headings.map(h => ({
@@ -78,7 +108,7 @@ export function OutlineEditor({ filePath }: Props) {
           ref={editorRef}
           key={filePath}
           value={content}
-          onChange={save}
+          onChange={handleChange}
           placeholder="用标题、正文、列表直接编辑大纲…"
           onHeadingsChange={handleHeadingsChange}
         />

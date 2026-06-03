@@ -132,10 +132,10 @@ async function loadAgentSkillMap(): Promise<Record<string, string[]>> {
 }
 
 // ── 资源清单（供输入框选择器列出内置技能与专家）────────────────────────────────
-function parseFrontmatterField(md: string, field: string): string {
-  const m = md.match(/^---\n([\s\S]*?)\n---/)
+export function parseFrontmatterField(md: string, field: string): string {
+  const m = md.replace(/^\uFEFF/, '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!m) return ''
-  const line = m[1].split('\n').find(l => l.trimStart().startsWith(`${field}:`))
+  const line = m[1].split(/\r?\n/).find(l => l.trimStart().startsWith(`${field}:`))
   if (!line) return ''
   return line.slice(line.indexOf(':') + 1).trim().replace(/^"|"$/g, '')
 }

@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChrFile } from '@/types'
-import { useWorkspaceStore } from '@/store'
+import { useEditorSaveStore, useWorkspaceStore } from '@/store'
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
@@ -20,18 +20,50 @@ const splitList = (value: string) => value
 
 export function CharacterEditor({ filePath, file }: Props) {
   const [data, setData] = useState(file)
-  const { saveFile, markDirty } = useWorkspaceStore()
+  const dataRef = useRef(file)
+  const savedRef = useRef(file)
+  const { saveFile, markDirty, clearDirty } = useWorkspaceStore()
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
+
+  useEffect(() => {
+    dataRef.current = file
+    savedRef.current = file
+    setData(file)
+    clearDirty(filePath)
+  }, [clearDirty, file, filePath])
+
+  const saveNow = useCallback(async (updated = dataRef.current) => {
+    await saveFile(filePath, updated)
+    savedRef.current = updated
+    clearDirty(filePath)
+  }, [clearDirty, filePath, saveFile])
+
+  useEffect(() => registerSaveHandler(filePath, {
+    save: () => saveNow(),
+    discard: () => {
+      dataRef.current = savedRef.current
+      setData(savedRef.current)
+      clearDirty(filePath)
+    }
+  }), [clearDirty, filePath, registerSaveHandler, saveNow])
 
   const patch = useCallback(async (changes: Partial<ChrFile>) => {
-    const updated = { ...data, ...changes }
+    const updated = { ...dataRef.current, ...changes }
+    dataRef.current = updated
     setData(updated)
     markDirty(filePath)
-    await saveFile(filePath, updated)
-  }, [data, filePath, saveFile, markDirty])
+    if (autoSave) await saveNow(updated)
+  }, [autoSave, filePath, markDirty, saveNow])
 
   const updateLocal = useCallback((changes: Partial<ChrFile>) => {
-    setData(current => ({ ...current, ...changes }))
-  }, [])
+    setData(current => {
+      const updated = { ...current, ...changes }
+      dataRef.current = updated
+      return updated
+    })
+    markDirty(filePath)
+  }, [filePath, markDirty])
 
   const accent = data.color || '#e0a458'
 

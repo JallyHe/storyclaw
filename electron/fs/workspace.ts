@@ -19,6 +19,8 @@ import type {
   UploadedReference
 } from '../../src/types'
 import { formatImportedScreenplayText } from '../../src/editors/screenplay/importer'
+import { applyTemplate, isConfidentMatch, rankTemplates } from '../../src/editors/screenplay/formatTemplates'
+import { loadAllTemplates } from '../screenplay/formatStore'
 import { createEmptyWorldSections } from '../../src/editors/world/sections'
 import { parseFile, serializeFile } from './serializer'
 
@@ -585,7 +587,17 @@ export async function importScreenplayFile(root: string, sourcePath: string, tar
 
   const title = path.basename(sourcePath, path.extname(sourcePath))
   const text = await readTextFile(sourcePath)
-  const content = formatImportedScreenplayText({ text, title })
+  // 先尝试用格式模板库自动匹配；命中可信则套用，否则回退启发式格式化
+  let content: string
+  try {
+    const ranked = rankTemplates(text, await loadAllTemplates())
+    const best = ranked[0]
+    content = best && isConfidentMatch(best.stats)
+      ? applyTemplate(text, best.template, { title, episode: 'EP' }).markup
+      : formatImportedScreenplayText({ text, title })
+  } catch {
+    content = formatImportedScreenplayText({ text, title })
+  }
   const destPath = await nextAvailablePath(safeTarget, `${title}.ep`)
   await fs.writeFile(destPath, content, 'utf-8')
   return {

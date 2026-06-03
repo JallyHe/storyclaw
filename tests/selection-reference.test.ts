@@ -44,8 +44,8 @@ describe('selection references', () => {
     expect(context).toContain('路径：剧集/EP01.ep')
     expect(context).toContain('ProseMirror 位置：42-88')
     expect(context).toContain('action#b1')
-    expect(context).toContain('read_screenplay')
+    expect(context).toContain('read_selection')
+    expect(context).toContain('from=42')
     expect(context).toContain('不包含被选中文本正文')
   })
 })
-

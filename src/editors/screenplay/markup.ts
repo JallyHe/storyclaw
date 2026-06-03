@@ -150,10 +150,10 @@ export function serializeScreenplayMarkup(file: EpFile): string {
 
 function serializeSingleScreenplayMarkup(file: EpFile): string {
   const metadataLines = [
-    `@episode: ${file.episode || 'EP'}`,
-    `@title: ${file.title || ''}`,
-    `@status: ${file.status || 'wip'}`,
-    ...(file.logline ? [`@logline: ${file.logline}`] : [])
+    metaLine('episode', file.episode || 'EP'),
+    metaLine('title', file.title || ''),
+    metaLine('status', file.status || 'wip'),
+    ...(file.logline ? [metaLine('logline', file.logline)] : [])
   ]
   const body = file.blocks.map(block => {
     if (block.type === 'scene') return `# ${formatSceneMarkup(block)}`
@@ -164,6 +164,11 @@ function serializeSingleScreenplayMarkup(file: EpFile): string {
     return block.text.trim()
   }).filter(Boolean).join('\n\n')
   return `${metadataLines.join('\n')}\n\n${body}`.trim()
+}
+
+function metaLine(key: string, value: string) {
+  const trimmed = value.trim()
+  return trimmed ? `@${key}: ${trimmed}` : `@${key}:`
 }
 
 export function exportScreenplayAsTxt(file: EpFile): string {

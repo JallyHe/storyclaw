@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { useCopilotDraftStore, useSessionsStore } from '@/store'
+import { useChangesStore, useCopilotDraftStore, useSessionsStore, useTabsStore, useUiStore } from '@/store'
 import { useAgentEvents } from '@/hooks/useAgentEvents'
 import { Message } from './Message'
 import { AgentComposer, type AgentComposerHandle } from './AgentComposer'
@@ -23,7 +23,12 @@ export function Copilot({ width }: Props) {
   const composerRef = useRef<AgentComposerHandle>(null)
   const { sessions, activeId, setActive, newSession, visibleSessions } = useSessionsStore()
   const queuedSelection = useCopilotDraftStore(s => s.queuedSelection)
+  const changes = useChangesStore(s => s.changes)
+  const acceptAll = useChangesStore(s => s.acceptAll)
+  const openTab = useTabsStore(s => s.openTab)
+  const setView = useUiStore(s => s.setView)
   const [chatOpen, setChatOpen] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
   const session = sessions.find(s => s.id === activeId)
   const visible = visibleSessions()
   const messages = session?.messages ?? []
@@ -52,6 +57,14 @@ export function Copilot({ width }: Props) {
   const pickSession = (id: string) => {
     setActive(id)
     setChatOpen(true)
+  }
+
+  const changeList = [...changes.entries()]
+  const totalAdd = changeList.reduce((total, [, change]) => total + change.diffBlocks.filter(block => block.diff === 'add').length, 0)
+  const totalDel = changeList.reduce((total, [, change]) => total + change.diffBlocks.filter(block => block.diff === 'del').length, 0)
+  const openChange = (fileId: string) => {
+    setView('editor')
+    openTab(fileId)
   }
 
   return (
@@ -107,6 +120,56 @@ export function Copilot({ width }: Props) {
         </div>
       ) : (
         <>
+          {changeList.length > 0 && (
+            <div className="cp-changes-summary">
+              <button type="button" className="cp-changes-head" onClick={() => setChangesOpen(open => !open)}>
+                <Ic.changes width={13} height={13} />
+                <span>{changeList.length} 个改动</span>
+                <span className="cp-changes-stat">
+                  {totalAdd > 0 && <b className="add">+{totalAdd}</b>}
+                  {totalDel > 0 && <b className="del">-{totalDel}</b>}
+                </span>
+                <Ic.chevD width={12} height={12} style={{ transform: changesOpen ? 'rotate(180deg)' : undefined }} />
+              </button>
+              {changesOpen && (
+                <div className="cp-changes-list">
+                  {changeList.map(([fileId, change]) => {
+                    const name = fileId.split(/[\\/]/).pop() ?? fileId
+                    const adds = change.diffBlocks.filter(block => block.diff === 'add')
+                    const dels = change.diffBlocks.filter(block => block.diff === 'del')
+                    const preview = change.diffBlocks
+                      .filter(block => block.diff)
+                      .slice(0, 4)
+                      .map(block => ({
+                        diff: block.diff,
+                        text: 'text' in block.blk ? block.blk.text : 'location' in block.blk ? block.blk.location : block.blk.type
+                      }))
+                    return (
+                      <button key={fileId} type="button" className="cp-change-file" onClick={() => openChange(fileId)}>
+                        <span className="cp-change-file-row">
+                          <span className="cp-change-name">{name}</span>
+                          <span className="cp-changes-stat">
+                            {adds.length > 0 && <b className="add">+{adds.length}</b>}
+                            {dels.length > 0 && <b className="del">-{dels.length}</b>}
+                          </span>
+                        </span>
+                        {preview.length > 0 && (
+                          <span className="cp-change-preview">
+                            {preview.map((item, index) => (
+                              <span key={index} className={item.diff === 'add' ? 'add' : 'del'}>{item.diff === 'add' ? '+' : '-'} {item.text}</span>
+                            ))}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                  <button type="button" className="cp-change-accept-all" onClick={() => void acceptAll()}>
+                    <Ic.checkAll width={12} height={12} /> 全部接受
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="cp-scroll" ref={scrollRef}>
             {empty && (
               <div>

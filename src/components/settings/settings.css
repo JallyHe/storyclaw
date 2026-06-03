@@ -104,6 +104,16 @@
 .set-key-row { display: flex; gap: 8px; }
 .set-key-row input { flex: 1; }
 .set-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-1); cursor: pointer; }
+.set-toggle-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 10px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  color: var(--text-1); cursor: pointer;
+}
+.set-toggle-row input { width: 18px; height: 18px; accent-color: var(--accent-ai); }
+.set-toggle-row span { display: flex; flex-direction: column; gap: 3px; }
+.set-toggle-row strong { font-size: 13.5px; }
+.set-toggle-row small { color: var(--text-3); font-size: 12px; }
 .set-editor-actions { display: flex; align-items: center; gap: 8px; }
 
 /* ── 接入平台卡片 ─────────────────────────────────────────────────────────── */

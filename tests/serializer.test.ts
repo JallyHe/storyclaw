@@ -172,6 +172,22 @@ describe('parseFile', () => {
     expect(serialized.trim().startsWith('{')).toBe(false)
   })
 
+  it('does not write trailing spaces for empty screenplay metadata fields', () => {
+    const serialized = serializeFile({
+      version: 1,
+      episode: 'EP01',
+      title: '',
+      status: 'wip',
+      logline: '',
+      blocks: [
+        { id: 's1', type: 'scene', number: '1', location: '', intext: '', time: '', synopsis: '' },
+        { id: 'a1', type: 'action', text: '动作。' }
+      ]
+    })
+
+    expect(serialized.split('\n').filter(line => /[ \t]$/.test(line))).toEqual([])
+  })
+
   it('parses and serializes multiple episodes in one .ep file', () => {
     const multi = parseScreenplayMarkup(`@series: 追光短剧
 

@@ -19,7 +19,7 @@ const BINARY_REF_EXTS = new Set(['pdf', 'docx', 'doc', 'rtf'])
 
 export function FileEditor({ filePath }: Props) {
   const { getFile, saveFile } = useWorkspaceStore()
-  const { changes, acceptChange, rejectChange } = useChangesStore()
+  const { changes, acceptChange, rejectChange, acceptAll } = useChangesStore()
   // Re-load when this file's version bumps (AI wrote to it outside the editor)
   const fileVersion = useWorkspaceStore(s => (filePath ? s.fileVersions.get(filePath) ?? 0 : 0))
   const [file, setFile] = useState<StoryFile | null>(() => filePath ? useWorkspaceStore.getState().fileCache.get(filePath) ?? null : null)
@@ -97,6 +97,7 @@ export function FileEditor({ filePath }: Props) {
             onSave={saveCurrentFile}
             onAccept={() => acceptChange(filePath)}
             onReject={() => rejectChange(filePath)}
+            onAcceptAll={acceptAll}
           />
         </div>
       )

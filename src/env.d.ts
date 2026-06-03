@@ -77,9 +77,12 @@ interface Window {
         minimize(): Promise<void>
         toggleMaximize(): Promise<boolean>
         close(): Promise<void>
+        confirmClose(): Promise<void>
+        confirmUnsaved(fileNames: string[]): Promise<'save' | 'discard' | 'cancel'>
         show(): Promise<void>
         isMaximized(): Promise<boolean>
         toggleDevTools(): Promise<void>
+        onCloseRequest(cb: () => void | Promise<void>): () => void
         onMaximizedChange(cb: (isMaximized: boolean) => void): () => void
       }
       app: {

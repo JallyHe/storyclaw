@@ -34,7 +34,10 @@ sessionsState.visibleSessions.mockReturnValue(sessionsState.sessions)
 
 vi.mock('../src/store', () => ({
   useSessionsStore: () => sessionsState,
-  useCopilotDraftStore: (selector: (state: { queuedSelection: null }) => unknown) => selector({ queuedSelection: null })
+  useCopilotDraftStore: (selector: (state: { queuedSelection: null }) => unknown) => selector({ queuedSelection: null }),
+  useChangesStore: (selector: (state: { changes: Map<string, unknown>; acceptAll: () => Promise<void> }) => unknown) => selector({ changes: new Map(), acceptAll: vi.fn() }),
+  useTabsStore: (selector: (state: { openTab: () => void }) => unknown) => selector({ openTab: vi.fn() }),
+  useUiStore: (selector: (state: { setView: () => void }) => unknown) => selector({ setView: vi.fn() })
 }))
 
 vi.mock('../src/hooks/useAgentEvents', () => ({

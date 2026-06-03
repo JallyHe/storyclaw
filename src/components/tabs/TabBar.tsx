@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
-import { useTabsStore, useWorkspaceStore, useChangesStore } from '@/store'
+import { requestUnsavedDocumentAction, useTabsStore, useWorkspaceStore, useChangesStore } from '@/store'
 import { FILE_KIND, Ic } from '@/components/icons'
 
 export function TabBar() {
@@ -31,17 +31,21 @@ export function TabBar() {
     setMenu({ x: event.clientX, y: event.clientY, filePath })
   }
 
-  const closeCurrent = (filePath: string) => {
+  const closeCurrent = async (filePath: string) => {
+    if (!(await requestUnsavedDocumentAction([filePath]))) return
     closeTab(filePath)
     setMenu(null)
   }
 
-  const closeOthers = (filePath: string) => {
+  const closeOthers = async (filePath: string) => {
+    const targets = openTabs.filter(path => path !== filePath)
+    if (!(await requestUnsavedDocumentAction(targets))) return
     closeOtherTabs(filePath)
     setMenu(null)
   }
 
-  const closeAll = () => {
+  const closeAll = async () => {
+    if (!(await requestUnsavedDocumentAction(openTabs))) return
     closeAllTabs()
     setMenu(null)
   }
@@ -74,7 +78,7 @@ export function TabBar() {
             </span>
             <button
               className={`tab-close${dirty ? ' dirty' : ''}`}
-              onClick={e => { e.stopPropagation(); closeTab(filePath) }}
+              onClick={e => { e.stopPropagation(); void closeCurrent(filePath) }}
               title="关闭"
             >
               <span className="tab-dirty-dot" />
@@ -85,9 +89,9 @@ export function TabBar() {
       })}
       {menu && (
         <div className="tree-menu tab-menu" style={{ left: menu.x, top: menu.y }} onClick={event => event.stopPropagation()}>
-          <button onClick={() => closeCurrent(menu.filePath)}>关闭</button>
-          <button disabled={openTabs.length <= 1} onClick={() => closeOthers(menu.filePath)}>关闭其他</button>
-          <button disabled={openTabs.length === 0} onClick={closeAll}>关闭所有</button>
+          <button onClick={() => { void closeCurrent(menu.filePath) }}>关闭</button>
+          <button disabled={openTabs.length <= 1} onClick={() => { void closeOthers(menu.filePath) }}>关闭其他</button>
+          <button disabled={openTabs.length === 0} onClick={() => { void closeAll() }}>关闭所有</button>
         </div>
       )}
     </div>

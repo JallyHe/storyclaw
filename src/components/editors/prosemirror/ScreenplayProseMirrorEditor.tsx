@@ -11,7 +11,7 @@ import { addEpisodeToFile } from '@/editors/screenplay/episodeCollection'
 import { episodeLabel } from '@/editors/screenplay/episodeMeta'
 import { screenplaySchema, SCREENPLAY_LABELS, type ScreenplayLineType } from '@/editors/screenplay/schema'
 import { DiffBar } from '@/components/editors/episode/DiffBar'
-import { useCopilotDraftStore, useEditorViewCacheStore, useTabsStore, useUiStore, useWorkspaceStore } from '@/store'
+import { useCopilotDraftStore, useEditorSaveStore, useEditorViewCacheStore, useTabsStore, useUiStore, useWorkspaceStore } from '@/store'
 import { revealMatchInElement } from '@/editors/revealMatch'
 import { workspaceRelativePath } from '@/components/copilot/currentDocumentContext'
 import type { SelectionReference } from '@/components/copilot/selectionReference'
@@ -101,6 +101,8 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const findQueryRef = useRef('')
   const findOptsRef  = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
   const latestRef = useRef({ file, onSave })
+  const draftFileRef = useRef(file)
+  const autoSaveRef = useRef(false)
   const [editorRevision, setEditorRevision] = useState(0)
 
   const episodes = file.episodes && file.episodes.length > 1 ? file.episodes : null
@@ -120,10 +122,18 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const revealTarget = useTabsStore(s => s.revealTarget)
   const consumeReveal = useTabsStore(s => s.consumeReveal)
   const workspaceRoot = useWorkspaceStore(s => s.root)
+  const markDirty = useWorkspaceStore(s => s.markDirty)
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
   const queueSelection = useCopilotDraftStore(s => s.queueSelection)
   const setRightOpen = useUiStore(s => s.setRightOpen)
 
   const readonly = !!diffBlocks
+  autoSaveRef.current = autoSave
+
+  useEffect(() => {
+    draftFileRef.current = file
+  }, [file, fileVersion])
 
   // Reveal a search match (best-effort DOM text search)
   useEffect(() => {
@@ -227,6 +237,27 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   }, [displayedFile, filePath])
 
   useEffect(() => {
+    if (readonly) return
+    return registerSaveHandler(filePath, {
+      save: async () => {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = null
+        }
+        await latestRef.current.onSave(snapshotFile())
+      },
+      discard: () => {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = null
+        }
+        draftFileRef.current = file
+        setEditorRevision(revision => revision + 1)
+      }
+    })
+  }, [filePath, readonly, registerSaveHandler])
+
+  useEffect(() => {
     if (!mountRef.current) return
     const doc   = screenplaySchema.nodeFromJSON(epFileToScreenplayDoc(displayedFile, { includeEpisodeHeadings: true }))
     let state = EditorState.create({
@@ -283,11 +314,16 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
         saveViewState(view, newState, nextLineType)
 
         if (!readonly && tr.docChanged) {
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-          saveTimerRef.current = setTimeout(() => {
-            const latest = latestRef.current
-            latest.onSave(screenplayDocToEpFile(latest.file, newState.doc.toJSON()), { updateLocalState: false })
-          }, 500)
+          const updatedFile = screenplayDocToEpFile(draftFileRef.current, newState.doc.toJSON())
+          draftFileRef.current = updatedFile
+          markDirty(filePath)
+          if (autoSaveRef.current) {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+            saveTimerRef.current = setTimeout(() => {
+              const latest = latestRef.current
+              latest.onSave(draftFileRef.current, { updateLocalState: false })
+            }, 500)
+          }
         }
       },
       attributes: {
@@ -311,7 +347,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
       view.destroy()
       viewRef.current = null
     }
-  }, [diffBlocks, editorRevision, filePath, fileVersion, readonly])
+  }, [diffBlocks, editorRevision, filePath, fileVersion, markDirty, readonly])
 
   const updateStats = useCallback((view: EditorView, state: EditorState) => {
     setWordCount(state.doc.textContent.length)
@@ -338,8 +374,10 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
 
   const snapshotFile = () => {
     const view = viewRef.current
-    if (!view) return file
-    return screenplayDocToEpFile(file, view.state.doc.toJSON())
+    if (!view) return draftFileRef.current
+    const updated = screenplayDocToEpFile(draftFileRef.current, view.state.doc.toJSON())
+    draftFileRef.current = updated
+    return updated
   }
 
   const addEpisode = async () => {

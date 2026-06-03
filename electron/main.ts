@@ -62,6 +62,7 @@ import {
 
 export let win: BrowserWindow | null = null
 let stopWatch: (() => void) | null = null
+let closeConfirmedByRenderer = false
 const appIconPath = path.join(__dirname, '../assets/storyclaw-logo.png')
 
 function readElectronClipboardFilePaths(): string[] {
@@ -163,6 +164,12 @@ function bindWindowStateEvents(targetWindow: BrowserWindow): void {
   })
   targetWindow.on('close', event => {
     if (shouldQuit()) return
+    if (!closeConfirmedByRenderer) {
+      event.preventDefault()
+      targetWindow.webContents.send('window:close-request')
+      return
+    }
+    closeConfirmedByRenderer = false
     event.preventDefault()
     hideToTray(targetWindow)
   })
@@ -251,7 +258,7 @@ ipcMain.handle('workspace:readFileBuffer', async (_e, filePath: string) => {
 })
 
 ipcMain.handle('workspace:writeText', async (_e, filePath: string, content: string) => {
-  const result = writeTextFile(filePath, content)
+  const result = await writeTextFile(filePath, content)
   win?.webContents.send('workspace:watch', 'change', path.basename(filePath))
   return result
 })
@@ -488,7 +495,31 @@ ipcMain.handle('window:toggleMaximize', () => {
 })
 
 ipcMain.handle('window:close', () => {
-  hideToTray(win)
+  win?.webContents.send('window:close-request')
+})
+
+ipcMain.handle('window:confirmClose', () => {
+  if (!win) return
+  closeConfirmedByRenderer = true
+  win.close()
+})
+
+ipcMain.handle('window:confirmUnsaved', async (_e, fileNames: string[]) => {
+  if (!win) return 'cancel'
+  const count = fileNames.length
+  const result = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['保存', '不保存', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    title: '未保存的修改',
+    message: count === 1 ? `是否保存“${fileNames[0]}”的修改？` : `是否保存 ${count} 个未保存文档的修改？`,
+    detail: fileNames.slice(0, 8).join('\n') + (count > 8 ? `\n...还有 ${count - 8} 个文件` : ''),
+    noLink: true
+  })
+  if (result.response === 0) return 'save'
+  if (result.response === 1) return 'discard'
+  return 'cancel'
 })
 
 ipcMain.handle('window:isMaximized', () => {

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { AppView, LeftPanel, ThemeKey } from '@/types'
 
-export type SettingsTab = 'model' | 'integrations'
+export type SettingsTab = 'model' | 'editor' | 'integrations'
 
 interface UiState {
   view: AppView

@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProjectConfigFile, ProjectType, ScreenplayLayout } from '@/types'
-import { useWorkspaceStore } from '@/store'
+import { useEditorSaveStore, useWorkspaceStore } from '@/store'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -15,18 +15,50 @@ interface Props { filePath: string; file: ProjectConfigFile }
 
 export function ProjectConfigEditor({ filePath, file }: Props) {
   const [data, setData] = useState(file)
-  const { saveFile, markDirty } = useWorkspaceStore()
+  const dataRef = useRef(file)
+  const savedRef = useRef(file)
+  const { saveFile, markDirty, clearDirty } = useWorkspaceStore()
+  const autoSave = useEditorSaveStore(s => s.autoSave)
+  const registerSaveHandler = useEditorSaveStore(s => s.registerHandler)
+
+  useEffect(() => {
+    dataRef.current = file
+    savedRef.current = file
+    setData(file)
+    clearDirty(filePath)
+  }, [clearDirty, file, filePath])
+
+  const saveNow = useCallback(async (updated = dataRef.current) => {
+    await saveFile(filePath, updated)
+    savedRef.current = updated
+    clearDirty(filePath)
+  }, [clearDirty, filePath, saveFile])
+
+  useEffect(() => registerSaveHandler(filePath, {
+    save: () => saveNow(),
+    discard: () => {
+      dataRef.current = savedRef.current
+      setData(savedRef.current)
+      clearDirty(filePath)
+    }
+  }), [clearDirty, filePath, registerSaveHandler, saveNow])
 
   const patch = useCallback(async (patchData: Partial<ProjectConfigFile>) => {
-    const updated = { ...data, ...patchData, kind: 'storyclaw-project' as const, version: 1 as const }
+    const updated = { ...dataRef.current, ...patchData, kind: 'storyclaw-project' as const, version: 1 as const }
+    dataRef.current = updated
     setData(updated)
     markDirty(filePath)
-    await saveFile(filePath, updated)
-  }, [data, filePath, markDirty, saveFile])
+    if (autoSave) await saveNow(updated)
+  }, [autoSave, filePath, markDirty, saveNow])
 
   const updateLocal = useCallback((patchData: Partial<ProjectConfigFile>) => {
-    setData(current => ({ ...current, ...patchData, kind: 'storyclaw-project', version: 1 }))
-  }, [])
+    setData(current => {
+      const updated = { ...current, ...patchData, kind: 'storyclaw-project' as const, version: 1 as const }
+      dataRef.current = updated
+      return updated
+    })
+    markDirty(filePath)
+  }, [filePath, markDirty])
 
   const patchType = (type: ProjectType) => {
     const screenplayLayout: ScreenplayLayout = type === 'short'
@@ -36,7 +68,7 @@ export function ProjectConfigEditor({ filePath, file }: Props) {
         : 'one-file-per-episode'
     void patch({
       type,
-      episodes: type === 'film' ? 1 : data.episodes,
+      episodes: type === 'film' ? 1 : dataRef.current.episodes,
       episodeDurationMinutes: type === 'film' ? 100 : type === 'short' ? 3 : 45,
       screenplayLayout
     })
