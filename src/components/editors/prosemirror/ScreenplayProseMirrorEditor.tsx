@@ -15,6 +15,8 @@ import { useCopilotDraftStore, useEditorViewCacheStore, useTabsStore, useUiStore
 import { revealMatchInElement } from '@/editors/revealMatch'
 import { workspaceRelativePath } from '@/components/copilot/currentDocumentContext'
 import type { SelectionReference } from '@/components/copilot/selectionReference'
+import { collectDocPositions, injectDomHighlights, clearDomSpans } from './RichTextEditor'
+import type { FindHandlers } from '@/components/editors/FindBar'
 import './prosemirror.css'
 
 interface Props {
@@ -25,6 +27,7 @@ interface Props {
   onSave: (file: EpFile, options?: { updateLocalState?: boolean }) => Promise<void>
   onAccept: () => void
   onReject: () => void
+  onAcceptAll?: () => void
 }
 
 const LINE_TYPES: ScreenplayLineType[] = SCREENPLAY_LINE_ORDER
@@ -90,11 +93,16 @@ function extractScenes(state: EditorState, view: EditorView): DocOutlineItem[] {
   return items
 }
 
-export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffBlocks, onSave, onAccept, onReject }: Props) {
+export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffBlocks, onSave, onAccept, onReject, onAcceptAll }: Props) {
   const mountRef   = useRef<HTMLDivElement>(null)
   const scrollRef  = useRef<HTMLDivElement>(null)
   const viewRef    = useRef<EditorView | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const findSpansRef  = useRef<HTMLSpanElement[]>([])
+  const findDocPosRef = useRef<Array<{ from: number; to: number }>>([])
+  const findCurrentRef = useRef(0)
+  const findQueryRef   = useRef('')
+  const findOptsRef    = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
   const latestRef = useRef({ file, onSave })
   const [editorRevision, setEditorRevision] = useState(0)
 
@@ -106,6 +114,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const [slashIndex, setSlashIndex] = useState(0)
   const [sceneItems, setSceneItems] = useState<DocOutlineItem[]>([])
   const [selectionMenu, setSelectionMenu] = useState<{ top: number; left: number; ref: SelectionReference } | null>(null)
+  const [diffReview, setDiffReview] = useState<{ top: number; left: number } | null>(null)
   const [inlinePromptOpen, setInlinePromptOpen] = useState(false)
   const [inlinePrompt, setInlinePrompt] = useState('')
   const slashMenuRef = useRef<typeof slashMenu>(null)
@@ -132,12 +141,84 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   // Must be declared before any hook that references it
   const displayedFile = useMemo<EpFile>(() => {
     if (!diffBlocks) return file
-    return { ...file, blocks: diffBlocks.map(item => item.blk) }
+    return { ...file, episodes: undefined, blocks: diffBlocks.map(item => item.blk) }
   }, [diffBlocks, file])
 
   latestRef.current = { file, onSave }
   slashMenuRef.current = slashMenu
   slashIndexRef.current = slashIndex
+  const findHandlers = useMemo<FindHandlers>(() => ({
+    find(query, opts) {
+      const view = viewRef.current
+      clearDomSpans(findSpansRef.current)
+      findSpansRef.current = []
+      findDocPosRef.current = []
+      findCurrentRef.current = 0
+      findQueryRef.current = query
+      findOptsRef.current = opts
+      if (!view || !query) return 0
+      findDocPosRef.current = collectDocPositions(view.state.doc, query, opts)
+      findSpansRef.current = injectDomHighlights(view.dom as HTMLElement, query, opts)
+      if (findSpansRef.current[0]) findSpansRef.current[0].scrollIntoView({ block: 'center', behavior: 'smooth' })
+      return findDocPosRef.current.length
+    },
+    next() {
+      const spans = findSpansRef.current
+      if (!spans.length) return
+      spans[findCurrentRef.current].className = 'find-highlight'
+      findCurrentRef.current = (findCurrentRef.current + 1) % spans.length
+      spans[findCurrentRef.current].className = 'find-highlight-current'
+      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+    },
+    prev() {
+      const spans = findSpansRef.current
+      if (!spans.length) return
+      spans[findCurrentRef.current].className = 'find-highlight'
+      findCurrentRef.current = (findCurrentRef.current - 1 + spans.length) % spans.length
+      spans[findCurrentRef.current].className = 'find-highlight-current'
+      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+    },
+    replace(replacement) {
+      const view = viewRef.current
+      const positions = findDocPosRef.current
+      if (!view || !positions.length) return
+      const { from, to } = positions[findCurrentRef.current]
+      clearDomSpans(findSpansRef.current)
+      findSpansRef.current = []
+      findDocPosRef.current = []
+      const node = replacement ? view.state.schema.text(replacement) : null
+      const tr = node
+        ? view.state.tr.replaceWith(from, to, node)
+        : view.state.tr.delete(from, to)
+      view.dispatch(tr)
+      // Re-run find to refresh
+      const count = this.find(findQueryRef.current, findOptsRef.current)
+      return count
+    },
+    replaceAll(query, replacement, opts) {
+      const view = viewRef.current
+      if (!view || !query) return 0
+      const positions = collectDocPositions(view.state.doc, query, opts)
+      if (!positions.length) return 0
+      clearDomSpans(findSpansRef.current)
+      findSpansRef.current = []
+      findDocPosRef.current = []
+      const sorted = [...positions].sort((a, b) => b.from - a.from)
+      let tr = view.state.tr
+      for (const { from, to } of sorted) {
+        const node = replacement ? view.state.schema.text(replacement) : null
+        tr = node ? tr.replaceWith(from, to, node) : tr.delete(from, to)
+      }
+      view.dispatch(tr)
+      return positions.length
+    },
+    clear() {
+      clearDomSpans(findSpansRef.current)
+      findSpansRef.current = []
+      findDocPosRef.current = []
+    }
+  }), [])
+
   const slashOptions = useMemo(() => slashMenu ? screenplaySlashOptions(slashMenu.query) : [], [slashMenu])
 
   useEffect(() => {
@@ -225,6 +306,8 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     })
     viewRef.current = view
     updateStats(view, state)
+    updateDiffDecorations(view)
+    requestAnimationFrame(() => updateDiffDecorations(view))
     const initialLineType = cachedState?.lineType ?? currentLineType(state)
     setLineType(initialLineType)
     if (!readonly) updateSlashMenu(view)
@@ -332,9 +415,12 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
       toolbar={toolbar}
       outlineItems={sceneItems.length > 0 ? sceneItems : undefined}
       statusLeft={statusLeft}
+      findHandlers={readonly ? undefined : findHandlers}
     >
       <div className="pm-editor-main screenplay-main">
-        {diffBlocks && <DiffBar fileId={filePath} onAccept={onAccept} onReject={onReject} />}
+        {diffBlocks && diffBlocks.some(block => block.diff) && (
+          <DiffBar onAccept={onAccept} onReject={onReject} onAcceptAll={onAcceptAll} />
+        )}
         <div
           ref={scrollRef}
           className="pm-screenplay-scroll"
@@ -345,6 +431,24 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
         >
           <div className="pm-paper" style={{ minHeight: pageCount * PAGE_HEIGHT }}>
             <div ref={mountRef} />
+            {!readonly && null}
+            {readonly && diffReview && (
+              <div className="pm-diff-review-pop" style={{ top: diffReview.top, left: diffReview.left }}>
+                <span className="pm-diff-review-title">AI 改动</span>
+                <span className="pm-diff-review-sub">审阅后接受或拒绝</span>
+                <button className="accept" onMouseDown={event => { event.preventDefault(); onAccept() }}>
+                  <Ic.check width={12} height={12} /> 接受
+                </button>
+                <button onMouseDown={event => { event.preventDefault(); onReject() }}>
+                  <Ic.x width={12} height={12} /> 拒绝
+                </button>
+                {onAcceptAll && (
+                  <button className="accept-all" onMouseDown={event => { event.preventDefault(); onAcceptAll() }}>
+                    <Ic.checkAll width={12} height={12} /> 全部接受
+                  </button>
+                )}
+              </div>
+            )}
             {!readonly && slashMenu && (
               <div className="pm-inline-menu" style={{ top: slashMenu.top, left: slashMenu.left }}>
                 {slashOptions.map((option, index) => {
@@ -456,6 +560,34 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
       ref,
       top: Math.max(10, coords.top - rootRect.top - 42),
       left: Math.max(26, coords.left - rootRect.left)
+    })
+  }
+
+  function updateDiffDecorations(view: EditorView) {
+    const diffById = new Map((diffBlocks ?? [])
+      .filter(block => block.diff && block.blk.id)
+      .map(block => [block.blk.id, block.diff] as const))
+    view.dom.querySelectorAll('.pm-diff-add, .pm-diff-del').forEach(node => {
+      node.classList.remove('pm-diff-add', 'pm-diff-del')
+    })
+    if (diffById.size === 0) {
+      setDiffReview(null)
+      return
+    }
+    let first: HTMLElement | null = null
+    view.dom.querySelectorAll<HTMLElement>('[data-id]').forEach(node => {
+      const diff = diffById.get(node.dataset.id ?? '')
+      if (!diff) return
+      node.classList.add(diff === 'add' ? 'pm-diff-add' : 'pm-diff-del')
+      if (!first) first = node
+    })
+    if (!first) {
+      setDiffReview(null)
+      return
+    }
+    setDiffReview({
+      top: Math.max(12, first.offsetTop - 6),
+      left: Math.max(20, first.offsetLeft + first.offsetWidth + 12)
     })
   }
 
