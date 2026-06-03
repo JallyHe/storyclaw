@@ -5,9 +5,10 @@
 
 import { DWClient, TOPIC_ROBOT, EventAck } from 'dingtalk-stream'
 import type { IMPlatformConfig, IMStatus } from '../../../src/im/types'
-import type { IMAdapter, IMReplyStream, IncomingMessage, MessageHandler } from '../types'
-import { createAndDeliverCard, getAccessToken, streamingUpdate, type CardDeliverContext } from './dingtalkCard'
+import type { IMAdapter, IncomingMessage, MessageHandler } from '../types'
+import { sendFileToUser } from './dingtalkMedia'
 
+/** 通过 sessionWebhook 回复一条原生 Markdown 消息。 */
 async function postToWebhook(sessionWebhook: string, text: string): Promise<void> {
   const res = await fetch(sessionWebhook, {
     method: 'POST',
@@ -19,45 +20,30 @@ async function postToWebhook(sessionWebhook: string, text: string): Promise<void
   }
 }
 
-/** 构造一个基于 AI 卡片的流式回复通道。 */
-function buildCardStream(
-  appKey: string,
-  appSecret: string,
-  cardTemplateId: string,
-  ctx: CardDeliverContext
-): IMReplyStream {
-  const outTrackId = `storyclaw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const guid = `${outTrackId}-g`
-  let token = ''
-  let lastSent = 0
-
-  return {
-    async begin() {
-      token = await getAccessToken(appKey, appSecret)
-      await createAndDeliverCard(token, outTrackId, cardTemplateId, ctx)
-    },
-    async update(fullText: string) {
-      const now = Date.now()
-      if (now - lastSent < 350) return // 限流，避免高频刷新
-      lastSent = now
-      await streamingUpdate(token, outTrackId, guid, fullText, false).catch(() => {})
-    },
-    async finish(fullText: string) {
-      await streamingUpdate(token, outTrackId, guid, fullText, true)
-    }
-  }
-}
-
 export class DingTalkAdapter implements IMAdapter {
   readonly platform = 'dingtalk' as const
   private client: DWClient | null = null
   private status: IMStatus = 'idle'
   private message?: string
+  /** 已处理过的 msgId → 时间戳，用于过滤网关重投的重复消息 */
+  private seen = new Map<string, number>()
+
+  /** 去重：5 分钟内同一 msgId 只处理一次。 */
+  private isDuplicate(msgId: string): boolean {
+    if (!msgId) return false
+    const now = Date.now()
+    // 顺手清理过期条目
+    for (const [id, ts] of this.seen) {
+      if (now - ts > 300000) this.seen.delete(id)
+    }
+    if (this.seen.has(msgId)) return true
+    this.seen.set(msgId, now)
+    return false
+  }
 
   async start(config: IMPlatformConfig, onMessage: MessageHandler): Promise<void> {
     const clientId = config.credentials.clientId?.trim()
     const clientSecret = config.credentials.clientSecret?.trim()
-    const cardTemplateId = config.credentials.cardTemplateId?.trim()
     if (!clientId || !clientSecret) {
       this.status = 'error'
       this.message = '缺少 App Key 或 App Secret'
@@ -74,33 +60,30 @@ export class DingTalkAdapter implements IMAdapter {
     client.registerCallbackListener(TOPIC_ROBOT, async (res: any) => {
       try {
         const message = JSON.parse(res.data)
+        const msgId: string = message?.msgId ?? ''
         const text: string = message?.text?.content?.trim() ?? ''
         const sessionWebhook: string = message?.sessionWebhook ?? ''
-        if (text && sessionWebhook) {
-          // 配置了卡片模板 → 提供 AI 流式卡片通道；否则回退纯文本/Markdown
-          let stream: IMReplyStream | undefined
-          if (cardTemplateId) {
-            const ctx: CardDeliverContext = {
-              conversationType: message?.conversationType ?? '1',
-              conversationId: message?.conversationId ?? '',
-              senderStaffId: message?.senderStaffId ?? '',
-              robotCode: message?.robotCode ?? clientId
-            }
-            stream = buildCardStream(clientId, clientSecret, cardTemplateId, ctx)
-          }
+        const senderStaffId: string = message?.senderStaffId ?? ''
+        const robotCode: string = message?.robotCode ?? clientId
+        // 过滤网关因 ACK 超时而重投的重复消息
+        if (text && sessionWebhook && !this.isDuplicate(msgId)) {
           const incoming: IncomingMessage = {
             platform: 'dingtalk',
-            messageId: message?.msgId ?? '',
+            messageId: msgId,
             text,
             senderNick: message?.senderNick ?? '',
             conversationId: message?.conversationId ?? '',
             reply: (reply: string) => postToWebhook(sessionWebhook, reply),
-            stream
+            sendFile: senderStaffId
+              ? (absPath: string) => sendFileToUser(clientId, clientSecret, robotCode, senderStaffId, absPath)
+              : undefined
           }
-          await onMessage(incoming)
+          // 关键：不 await 处理过程，立即向网关 ACK，避免超时重投；
+          // Agent 跑完后异步把回复发回钉钉。
+          void Promise.resolve(onMessage(incoming)).catch(err => console.error('[IM/钉钉] 处理消息失败:', err))
         }
       } catch (err) {
-        console.error('[IM/钉钉] 处理消息失败:', err)
+        console.error('[IM/钉钉] 解析消息失败:', err)
       }
       return { status: EventAck.SUCCESS }
     })

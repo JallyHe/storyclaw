@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useUiStore, useTabsStore, useWorkspaceStore, useImBotStore } from '@/store'
+import { useUiStore, useTabsStore, useWorkspaceStore, useSessionsStore } from '@/store'
 import { imIpc } from '@/ipc/im'
 import { Titlebar } from '@/components/shell/Titlebar'
 import { ActivityBar } from '@/components/shell/ActivityBar'
@@ -13,7 +13,6 @@ import { Breadcrumb } from '@/components/tabs/Breadcrumb'
 import { FileEditor } from '@/components/editors/FileEditor'
 import { Copilot } from '@/components/copilot/Copilot'
 import { AgentView } from '@/components/agent/AgentView'
-import { IMBotPanel } from '@/components/imbot/IMBotPanel'
 import { Wizard } from '@/components/wizard/Wizard'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { useAgentPersistence } from '@/hooks/useAgentPersistence'
@@ -38,9 +37,28 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  // 全局订阅机器人会话事件（即使面板未打开也持续收集）
+  // 全局订阅机器人会话事件：并入现有会话列表（标记为 imbot，桌面端只读）
   useEffect(() => {
-    return imIpc.onMessage(event => useImBotStore.getState().push(event))
+    return imIpc.onMessage(event => useSessionsStore.getState().ingestImEvent(event))
+  }, [])
+
+  // 机器人会话记录：启动时加载历史，变化时防抖全局保存（与工作区无关）
+  useEffect(() => {
+    imIpc.loadConversations()
+      .then(saved => { if (saved.length) useSessionsStore.getState().restoreImSessions(saved) })
+      .catch(() => {})
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let last = ''
+    const unsub = useSessionsStore.subscribe(() => {
+      const imbot = useSessionsStore.getState().sessions.filter(s => s.kind === 'imbot')
+      const serialized = JSON.stringify(imbot)
+      if (serialized === last) return
+      last = serialized
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => { void imIpc.saveConversations(imbot) }, 400)
+    })
+    return () => { if (timer) clearTimeout(timer); unsub() }
   }, [])
 
   // show welcome screen when no workspace is open
@@ -65,9 +83,6 @@ export default function App() {
                 )}
                 {leftPanel === 'scm' && (
                   <ScmPanel width={explorerWidth} />
-                )}
-                {leftPanel === 'imbot' && (
-                  <IMBotPanel width={explorerWidth} />
                 )}
                 <ResizeHandle
                   width={explorerWidth}

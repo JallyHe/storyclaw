@@ -152,7 +152,9 @@ const api = {
     onMessage: (cb: (event: IMConversationEvent) => void) => {
       ipcRenderer.on('im:message', (_e, event) => cb(event))
       return () => ipcRenderer.removeAllListeners('im:message')
-    }
+    },
+    loadConversations: (): Promise<unknown[]> => ipcRenderer.invoke('im:loadConversations'),
+    saveConversations: (sessions: unknown[]): Promise<void> => ipcRenderer.invoke('im:saveConversations', sessions)
   }
 }
 

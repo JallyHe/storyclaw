@@ -40,6 +40,7 @@ import { createAppTray, hideToTray, markQuitting, shouldQuit, showWindow } from 
 import { bindUpdater, checkForUpdates, getUpdateSnapshot, installUpdate } from './desktop/updater'
 import { imManager } from './im/manager'
 import { loadIMConfig } from './im/config'
+import { loadConversations, saveConversations } from './im/conversations'
 import type { IMConfigSnapshot, IMPlatform } from '../src/im/types'
 import {
   compareVersions,
@@ -542,6 +543,14 @@ ipcMain.handle('im:start', async (_e, platform: IMPlatform) => {
 
 ipcMain.handle('im:stop', async (_e, platform: IMPlatform) => {
   return imManager.stopPlatform(platform)
+})
+
+ipcMain.handle('im:loadConversations', () => {
+  return loadConversations()
+})
+
+ipcMain.handle('im:saveConversations', (_e, sessions: unknown[]) => {
+  return saveConversations(sessions)
 })
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────

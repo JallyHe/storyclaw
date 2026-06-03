@@ -5,6 +5,11 @@ import type { Session } from '@/types'
 
 interface Props { width: number }
 
+const PLATFORM_LABELS: Record<string, string> = { dingtalk: '钉钉', feishu: '飞书', wechat: '企微' }
+function platformLabel(platform?: string): string {
+  return platform ? (PLATFORM_LABELS[platform] ?? platform) : '机器人'
+}
+
 function SessionRow({ session, active, running, editing, editValue, onEditValue, onStartEdit, onCommitEdit, onCancelEdit, onPick, onContext }: {
   session: Session
   active: boolean
@@ -38,9 +43,11 @@ function SessionRow({ session, active, running, editing, editValue, onEditValue,
       onContextMenu={event => onContext(event, session)}
     >
       <span className="session-ico">
-        {running
-          ? <Ic.spark width={14} height={14} />
-          : <Ic.message width={14} height={14} />
+        {session.kind === 'imbot'
+          ? <Ic.robot width={14} height={14} />
+          : running
+            ? <Ic.spark width={14} height={14} />
+            : <Ic.message width={14} height={14} />
         }
       </span>
       <div className="session-body">
@@ -59,7 +66,10 @@ function SessionRow({ session, active, running, editing, editValue, onEditValue,
             }}
           />
         ) : (
-          <div className="session-title">{session.title}</div>
+          <div className="session-title">
+            {session.kind === 'imbot' && <span className="session-tag">{platformLabel(session.platform)}</span>}
+            {session.title}
+          </div>
         )}
         <div className="session-meta">{session.time}</div>
       </div>
@@ -82,7 +92,7 @@ export function SessionList({ width }: Props) {
 
   const groups: Record<string, typeof sessions> = {}
   sessions.forEach(s => { (groups[s.group] = groups[s.group] ?? []).push(s) })
-  const order = ['进行中', '今天', '更早']
+  const order = ['机器人', '进行中', '今天', '更早']
 
   const startEdit = (session: Session) => {
     setMenu(null)

@@ -23,6 +23,8 @@ export function AgentMain() {
   const busy = Boolean(lastMsg?.role === 'assistant' && lastMsg.typing)
   const empty = messages.length === 0
   const wsTitle = root ? root.split(/[\\/]/).pop() ?? '' : ''
+  const isImbot = session?.kind === 'imbot'
+  const platformLabel = ({ dingtalk: '钉钉', feishu: '飞书', wechat: '企微' } as Record<string, string>)[session?.platform ?? ''] ?? '机器人'
 
   useEffect(() => {
     const el = scrollRef.current
@@ -64,16 +66,23 @@ export function AgentMain() {
           )}
         </div>
       </div>
-      <div className="agent-composer-wrap">
-        <div className="agent-composer">
-          <AgentComposer
-            ref={composerRef}
-            busy={busy}
-            placeholder="描述你想做的事；/ 调用技能，@ 引用文件…"
-            big
-          />
+      {isImbot ? (
+        <div className="imbot-readonly-bar">
+          <Ic.robot width={15} height={15} />
+          <span>来自 {platformLabel} · {session?.peerName}：桌面端仅查看，回复请在 {platformLabel} 中进行。</span>
         </div>
-      </div>
+      ) : (
+        <div className="agent-composer-wrap">
+          <div className="agent-composer">
+            <AgentComposer
+              ref={composerRef}
+              busy={busy}
+              placeholder="描述你想做的事；/ 调用技能，@ 引用文件…"
+              big
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -115,6 +115,12 @@ export interface Session {
   messages: Message[]
   archived?: boolean
   titleEdited?: boolean
+  /** 会话类型：默认 agent；imbot = 来自 IM 平台的机器人会话（桌面端只读） */
+  kind?: 'agent' | 'imbot'
+  /** imbot 会话的对方名称（如钉钉发送人昵称） */
+  peerName?: string
+  /** imbot 会话来源平台 id（dingtalk/feishu/wechat） */
+  platform?: string
 }
 
 export interface AgentSnapshot {
@@ -162,7 +168,7 @@ export interface AgentResources {
 // ─── UI state ─────────────────────────────────────────────────────────────────
 
 export type AppView = 'editor' | 'agent'
-export type LeftPanel = 'explorer' | 'search' | 'scm' | 'imbot'
+export type LeftPanel = 'explorer' | 'search' | 'scm'
 export type AgentMode = 'craft' | 'plan' | 'ask'
 export type ThemeKey = 'dark' | 'light'
 

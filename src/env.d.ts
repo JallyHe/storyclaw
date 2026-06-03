@@ -100,6 +100,8 @@ interface Window {
         stop(platform: IMPlatform): Promise<IMStatusSnapshot>
         onStatus(cb: (snapshot: IMStatusSnapshot) => void): () => void
         onMessage(cb: (event: IMConversationEvent) => void): () => void
+        loadConversations(): Promise<unknown[]>
+        saveConversations(sessions: unknown[]): Promise<void>
       }
     }
   }

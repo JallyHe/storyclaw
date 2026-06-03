@@ -255,13 +255,13 @@ export class StoryClawAgentRuntime {
    * 直接订阅 session 事件收集助手回复文本，到 agent_end 时结算返回。
    * 默认用 ask 只读模式（不触发需 UI 审核的写入）。
    */
-  async promptOnce(text: string, mode: AgentMode = 'ask', onDelta?: (full: string) => void): Promise<string> {
+  async promptOnce(text: string, mode: AgentMode = 'ask', extraInstruction?: string): Promise<string> {
     const session = this.requireSession()
     this.applyMode(mode)
     setAgentPermission('default')
     const { cleanText, attachments } = await this.resolveFileMentions(text)
     const projectConfig = await this.readProjectConfigBlock()
-    const context = [getModeConfig(mode).systemSuffix, projectConfig].filter(Boolean).join('\n\n')
+    const context = [getModeConfig(mode).systemSuffix, projectConfig, extraInstruction].filter(Boolean).join('\n\n')
     const body = attachments
       ? `${context}\n\n用户请求：${cleanText}\n\n${attachments}`
       : `${context}\n\n用户请求：${cleanText}`
@@ -269,7 +269,15 @@ export class StoryClawAgentRuntime {
     return await new Promise<string>((resolve, reject) => {
       let collected = ''
       let settled = false
-      const timer = setTimeout(() => finish(), 120000) // 兜底超时 2 分钟
+      let timer: NodeJS.Timeout
+
+      // 空闲超时：每有事件就重置，仅在「持续 90s 无任何活动」时兜底结束，
+      // 避免长回复被固定总时长截断。
+      const IDLE_MS = 90000
+      const resetIdle = () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => finish(), IDLE_MS)
+      }
 
       const finish = (errText?: string) => {
         if (settled) return
@@ -281,13 +289,11 @@ export class StoryClawAgentRuntime {
       }
 
       const unsub: (() => void) | undefined = (session as any).subscribe((event: any) => {
+        resetIdle() // 任何事件都视为活跃
         switch (event.type) {
           case 'message_update': {
             const ae = event.assistantMessageEvent
-            if (ae?.type === 'text_delta' && typeof ae.delta === 'string') {
-              collected += ae.delta
-              if (onDelta) { try { onDelta(collected) } catch { /* ignore */ } }
-            }
+            if (ae?.type === 'text_delta' && typeof ae.delta === 'string') collected += ae.delta
             break
           }
           case 'agent_end': {
@@ -304,6 +310,7 @@ export class StoryClawAgentRuntime {
         }
       })
 
+      resetIdle()
       session.prompt(body).catch((err: any) => finish(err?.message ?? String(err)))
     })
   }

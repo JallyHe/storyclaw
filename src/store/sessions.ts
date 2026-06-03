@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AgentMode, AgentSnapshot, Session, Message } from '@/types'
+import type { IMConversationEvent } from '@/im/types'
 
 interface SessionsState {
   sessions: Session[]
@@ -20,6 +21,8 @@ interface SessionsState {
   getActiveMode: () => AgentMode
   deleteMessage: (sessionId: string, index: number) => void
   hydrateFromSnapshot: (snapshot: AgentSnapshot) => void
+  ingestImEvent: (event: IMConversationEvent) => void
+  restoreImSessions: (saved: Session[]) => void
 }
 
 const INITIAL_SESSION: Session = {
@@ -120,6 +123,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   })),
 
   newSession: () => {
+    // 已有空白会话（无消息、非机器人）→ 直接切到它，不再新建，也不立即持久化
+    const blank = get().sessions.find(sess => sess.kind !== 'imbot' && sess.messages.length === 0)
+    if (blank) {
+      set({ activeId: blank.id })
+      return
+    }
     const id = 's_' + Date.now()
     const session: Session = { id, title: '新会话', group: '进行中', time: '刚刚', messages: [] }
     set(s => ({
@@ -169,9 +178,78 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     })
   })),
 
-  hydrateFromSnapshot: (snapshot) => set({
-    sessions: snapshot.sessions.map(session => ({ ...session, archived: Boolean(session.archived) })),
-    activeId: snapshot.activeSessionId,
-    modeBySessionId: snapshot.modeBySessionId
+  hydrateFromSnapshot: (snapshot) => set(s => {
+    // 保留内存中的机器人会话（全局、不随工作区快照丢失）
+    const imbot = s.sessions.filter(x => x.kind === 'imbot')
+    const agent = snapshot.sessions.map(session => ({ ...session, archived: Boolean(session.archived) }))
+    let sessions: Session[] = [...imbot, ...agent]
+    let activeId = snapshot.activeSessionId
+    // 激活会话必须存在且未归档；否则落到首个可用会话，或补一个空白草稿
+    if (!sessions.some(x => x.id === activeId && !x.archived)) {
+      const firstAgent = agent.find(x => !x.archived)
+      if (firstAgent) {
+        activeId = firstAgent.id
+      } else {
+        const blank: Session = { id: 's_new', title: '新会话', group: '进行中', time: '刚刚', messages: [] }
+        sessions = [blank, ...sessions]
+        activeId = blank.id
+      }
+    }
+    return { sessions, activeId, modeBySessionId: snapshot.modeBySessionId }
+  }),
+
+  ingestImEvent: (event) => set(s => {
+    const sessionId = `imbot:${event.platform}:${event.conversationId}`
+    const peer = event.senderNick || '机器人会话'
+    const exists = s.sessions.some(sess => sess.id === sessionId)
+
+    // 把一条 IM 事件映射为会话消息
+    const toMessage = (): Message =>
+      event.role === 'user'
+        ? { role: 'user', text: event.text }
+        : { role: 'assistant', steps: [], reply: [event.text], typing: event.role === 'pending' }
+
+    const appendInto = (msgs: Message[]): Message[] => {
+      // 机器人答复/错误到达时，替换掉上一条「正在思考」占位
+      let base = msgs
+      if (event.role === 'assistant' || event.role === 'error') {
+        const last = base.at(-1)
+        if (last?.role === 'assistant' && last.typing) base = base.slice(0, -1)
+      }
+      return [...base, toMessage()]
+    }
+
+    if (exists) {
+      return {
+        sessions: s.sessions.map(sess =>
+          sess.id === sessionId
+            ? { ...sess, time: '刚刚', peerName: peer, messages: appendInto(sess.messages) }
+            : sess
+        )
+      }
+    }
+
+    const session: Session = {
+      id: sessionId,
+      kind: 'imbot',
+      platform: event.platform,
+      peerName: peer,
+      title: peer,
+      titleEdited: true,
+      group: '机器人',
+      time: '刚刚',
+      messages: appendInto([])
+    }
+    // 新机器人会话置顶，但不抢占当前激活会话
+    return { sessions: [session, ...s.sessions] }
+  }),
+
+  restoreImSessions: (saved) => set(s => {
+    const existing = new Set(s.sessions.map(x => x.id))
+    const toAdd = saved
+      .filter(x => x.kind === 'imbot' && !existing.has(x.id))
+      .map(x => ({ ...x, archived: Boolean(x.archived) }))
+    if (toAdd.length === 0) return {}
+    return { sessions: [...toAdd, ...s.sessions] }
   })
 }))

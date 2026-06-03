@@ -60,8 +60,7 @@ export const PLATFORM_REGISTRY: PlatformDescriptor[] = [
     ],
     fields: [
       { key: 'clientId', label: '钉钉 App Key', placeholder: '钉钉 App Key', required: true },
-      { key: 'clientSecret', label: '钉钉 App Secret', placeholder: '钉钉 App Secret', secret: true, required: true },
-      { key: 'cardTemplateId', label: 'AI 卡片模板 ID（可选）', placeholder: 'AI 卡片模板 ID，留空则用 Markdown 文本回复' }
+      { key: 'clientSecret', label: '钉钉 App Secret', placeholder: '钉钉 App Secret', secret: true, required: true }
     ],
     available: true
   },

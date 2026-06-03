@@ -160,6 +160,42 @@ function getConfigMessage(option: AgentModelOption | undefined): string {
   return ''
 }
 
+type BrowserSpeechRecognitionAlternative = {
+  transcript: string
+}
+
+type BrowserSpeechRecognitionResult = {
+  isFinal: boolean
+  [index: number]: BrowserSpeechRecognitionAlternative
+}
+
+type BrowserSpeechRecognitionEvent = {
+  resultIndex: number
+  results: {
+    length: number
+    [index: number]: BrowserSpeechRecognitionResult
+  }
+}
+
+type BrowserSpeechRecognition = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start(): void
+  stop(): void
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: BrowserSpeechRecognitionConstructor
+  webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor
+}
+
 interface Props {
   busy: boolean
   placeholder?: string
@@ -180,7 +216,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const [listening, setListening] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
   const [voiceUnsupported, setVoiceUnsupported] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const [skillQuery, setSkillQuery] = useState('')
   const [resources, setResources] = useState<AgentResources>({ agents: [], skills: [] })
   const [hasContent, setHasContent] = useState(false)
@@ -507,10 +543,8 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
       return
     }
 
-    type SR = typeof SpeechRecognition
-    const SRCtor: SR | undefined =
-      (window as unknown as Record<string, unknown>).SpeechRecognition as SR |undefined ??
-      (window as unknown as Record<string, unknown>).webkitSpeechRecognition as SR | undefined
+    const speechWindow = window as SpeechRecognitionWindow
+    const SRCtor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
 
     if (!SRCtor) {
       setVoiceUnsupported(true)
@@ -524,7 +558,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     rec.interimResults = true
     rec.maxAlternatives = 1
 
-    rec.onresult = (event: SpeechRecognitionEvent) => {
+    rec.onresult = (event: BrowserSpeechRecognitionEvent) => {
       let interim = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]

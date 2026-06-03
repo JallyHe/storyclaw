@@ -42,7 +42,8 @@ function createSnapshot(): AgentSnapshot {
     version: 1,
     activeSessionId: sessionsState.activeId,
     modeBySessionId: sessionsState.modeBySessionId,
-    sessions: sessionsState.sessions,
+    // 机器人会话单独全局持久化；空白草稿会话在发出第一条消息前不保存
+    sessions: sessionsState.sessions.filter(s => s.kind !== 'imbot' && s.messages.length > 0),
     pendingChanges: [...changesState.changes.values()]
   }
 }

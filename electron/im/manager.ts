@@ -2,7 +2,9 @@
 // 平台无关的路由中枢：持有各平台 adapter，按配置启停；
 // 收到消息 → 交给 agent 跑一次 → 把回复发回平台；并向渲染端广播状态。
 
-import type { BrowserWindow } from 'electron'
+import fs from 'fs/promises'
+import path from 'path'
+import { BrowserWindow } from 'electron'
 import type {
   IMConfigSnapshot,
   IMConversationEvent,
@@ -13,7 +15,22 @@ import type {
 import type { IMAdapter, IncomingMessage } from './types'
 import { DingTalkAdapter } from './adapters/dingtalk'
 import { loadIMConfig, saveIMConfig } from './config'
-import { runHeadlessPrompt } from '../agent/session'
+import { getWorkspaceRoot, runHeadlessPrompt } from '../agent/session'
+
+/**
+ * 从 agent 回复中解析「@发送文件/视频/音频:路径」指令。
+ * 返回去掉这些指令行后的正文，以及待发送的相对路径列表。
+ */
+function extractMediaDirectives(raw: string): { text: string; files: string[] } {
+  const files: string[] = []
+  const re = /^\s*@发送(?:文件|视频|音频)[:：]\s*(.+?)\s*$/gm
+  const text = raw.replace(re, (_m, p: string) => {
+    const rel = p.trim().replace(/^["'`]|["'`]$/g, '')
+    if (rel) files.push(rel)
+    return ''
+  }).replace(/\n{3,}/g, '\n\n').trim()
+  return { text, files }
+}
 
 /** adapter 工厂：新增平台时在此登记。 */
 const ADAPTER_FACTORIES: Partial<Record<IMPlatform, () => IMAdapter>> = {
@@ -89,47 +106,57 @@ class IMManager {
     return saved
   }
 
+  /** 取一个可用于广播的窗口：优先绑定窗口，失效则取任意存活窗口。 */
+  private targetWindow(): BrowserWindow | null {
+    if (this.win && !this.win.isDestroyed()) return this.win
+    const any = BrowserWindow.getAllWindows().find(w => !w.isDestroyed())
+    return any ?? null
+  }
+
   private async handleMessage(msg: IncomingMessage): Promise<void> {
+    console.log(`[IM] 收到消息 platform=${msg.platform} from=${msg.senderNick} text=${msg.text.slice(0, 40)}`)
     this.touchLastMessage(msg.platform)
     this.broadcastMessage(msg, 'user', msg.text)
-
-    // ── 流式卡片路径（钉钉配置了卡片模板时）──────────────────────────────────
-    if (msg.stream) {
-      let cardStarted = false
-      try {
-        await msg.stream.begin()
-        cardStarted = true
-        this.broadcastMessage(msg, 'pending', '正在思考中…')
-        const reply = await runHeadlessPrompt(msg.text, full => { void msg.stream!.update(full) })
-        const text = reply || '（助手没有返回内容）'
-        await msg.stream.finish(text)
-        this.broadcastMessage(msg, 'assistant', text)
-        return
-      } catch (err: any) {
-        const text = `⚠️ 处理失败：${err?.message ?? String(err)}`
-        if (cardStarted) {
-          // 卡片已创建：收尾错误，不再回退文本
-          await msg.stream.finish(text).catch(() => {})
-          this.broadcastMessage(msg, 'error', text)
-          return
-        }
-        // 卡片创建失败：落到下面的文本回退路径
-        console.error('[IM] 卡片创建失败，回退文本回复:', err)
-      }
-    }
-
-    // ── 文本/Markdown 回退路径 ──────────────────────────────────────────────
     this.broadcastMessage(msg, 'pending', '正在思考中…')
     void msg.reply('🤔 正在思考中，请稍候…').catch(() => {})
+
     try {
-      const reply = await runHeadlessPrompt(msg.text)
-      const text = reply || '（助手没有返回内容）'
-      await msg.reply(text)
-      this.broadcastMessage(msg, 'assistant', text)
+      const raw = await runHeadlessPrompt(msg.text)
+      // 解析「@发送文件/视频/音频:路径」指令，正文与待发文件分离
+      const { text, files } = extractMediaDirectives(raw)
+      const finalText = text || '（助手没有返回内容）'
+      await msg.reply(finalText)
+      this.broadcastMessage(msg, 'assistant', finalText)
+      await this.sendFiles(msg, files)
     } catch (err: any) {
       const text = `⚠️ 处理失败：${err?.message ?? String(err)}`
       await msg.reply(text).catch(() => {})
       this.broadcastMessage(msg, 'error', text)
+    }
+  }
+
+  /** 把 agent 指定的项目文件作为附件发给用户。 */
+  private async sendFiles(msg: IncomingMessage, relPaths: string[]): Promise<void> {
+    if (relPaths.length === 0) return
+    if (!msg.sendFile) {
+      this.broadcastMessage(msg, 'error', '当前平台不支持发送文件附件')
+      return
+    }
+    const root = getWorkspaceRoot()
+    if (!root) return
+    for (const rel of relPaths) {
+      try {
+        const abs = path.resolve(root, rel.replace(/[\\/]+/g, path.sep))
+        const relative = path.relative(root, abs)
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+          throw new Error('路径超出工作区范围')
+        }
+        await fs.access(abs)
+        await msg.sendFile(abs)
+        this.broadcastMessage(msg, 'assistant', `📎 已发送文件：${rel}`)
+      } catch (err: any) {
+        this.broadcastMessage(msg, 'error', `发送文件失败（${rel}）：${err?.message ?? String(err)}`)
+      }
     }
   }
 
@@ -143,7 +170,9 @@ class IMManager {
       text,
       ts: Date.now()
     }
-    this.win?.webContents.send('im:message', event)
+    const target = this.targetWindow()
+    if (!target) { console.warn('[IM] 无可用窗口，会话事件未能送达桌面端'); return }
+    target.webContents.send('im:message', event)
   }
 
   private setStatus(
@@ -154,7 +183,7 @@ class IMManager {
     const prev = this.statuses.get(platform)
     const snapshot: IMStatusSnapshot = { platform, status, message, lastMessageAt: prev?.lastMessageAt }
     this.statuses.set(platform, snapshot)
-    this.win?.webContents.send('im:status', snapshot)
+    this.targetWindow()?.webContents.send('im:status', snapshot)
     return snapshot
   }
 
@@ -162,7 +191,7 @@ class IMManager {
     const prev = this.statuses.get(platform) ?? { platform, status: 'connected' as const }
     const snapshot: IMStatusSnapshot = { ...prev, lastMessageAt: Date.now() }
     this.statuses.set(platform, snapshot)
-    this.win?.webContents.send('im:status', snapshot)
+    this.targetWindow()?.webContents.send('im:status', snapshot)
   }
 }
 

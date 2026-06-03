@@ -1,10 +1,9 @@
-import { useUiStore, useChangesStore, useImBotStore } from '@/store'
+import { useUiStore, useChangesStore } from '@/store'
 import { Ic } from '@/components/icons'
 
 export function ActivityBar() {
   const { leftPanel, setLeftPanel, leftOpen, toggleLeft } = useUiStore()
   const changesCount = useChangesStore(s => s.changes.size)
-  const imbotUnread = useImBotStore(s => s.unread)
 
   const select = (id: typeof leftPanel) => {
     if (leftPanel === id && leftOpen) { toggleLeft(); return }
@@ -16,7 +15,6 @@ export function ActivityBar() {
     { id: 'explorer' as const, icon: Ic.files,   label: '资源管理器' },
     { id: 'search'   as const, icon: Ic.search,  label: '搜索' },
     { id: 'scm'      as const, icon: Ic.history, label: '版本记录', badge: changesCount },
-    { id: 'imbot'    as const, icon: Ic.robot,   label: '机器人会话', badge: imbotUnread },
   ]
 
   return (
