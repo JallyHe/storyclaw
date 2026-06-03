@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FindHandlers } from '@/components/editors/FindBar'
 import { useWorkspaceStore, useTabsStore } from '@/store'
 import { workspaceIpc } from '@/ipc/workspace'
 import { DocumentEditorShell, type DocOutlineItem } from '@/components/editors/DocumentEditorShell'
@@ -17,6 +18,17 @@ export function OutlineEditor({ filePath }: Props) {
   const [outlineItems, setOutlineItems] = useState<DocOutlineItem[]>([])
 
   const editorRef = useRef<RichTextEditorHandle | null>(null)
+
+  const findHandlers = useMemo<FindHandlers>(() => ({
+    find(query, opts) { return editorRef.current?.findInEditor(query, opts) ?? 0 },
+    next() { editorRef.current?.findNext() },
+    prev() { editorRef.current?.findPrev() },
+    replace(replacement) { editorRef.current?.replaceMatch(replacement) },
+    replaceAll(query, replacement, opts) {
+      return editorRef.current?.replaceAllMatches(query, replacement, opts) ?? 0
+    },
+    clear() { editorRef.current?.clearHighlights() }
+  }), [])
   const revealTarget = useTabsStore(s => s.revealTarget)
   const consumeReveal = useTabsStore(s => s.consumeReveal)
   // Track external writes (AI agent) so the editor reloads
@@ -59,6 +71,7 @@ export function OutlineEditor({ filePath }: Props) {
     <DocumentEditorShell
       toolbar={toolbar}
       outlineItems={outlineItems.length > 0 ? outlineItems : undefined}
+      findHandlers={findHandlers}
     >
       <div className="doc-paper outline-paper">
         <RichTextEditor
