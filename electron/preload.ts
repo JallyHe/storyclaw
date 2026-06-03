@@ -163,6 +163,16 @@ const api = {
     },
     loadConversations: (): Promise<unknown[]> => ipcRenderer.invoke('im:loadConversations'),
     saveConversations: (sessions: unknown[]): Promise<void> => ipcRenderer.invoke('im:saveConversations', sessions)
+  },
+  serverConnection: {
+    connect: (serverUrl: string, email: string, password: string): Promise<{
+      success: boolean; modelCount?: number; balance?: number; error?: string
+    }> => ipcRenderer.invoke('serverConnection:connect', serverUrl, email, password),
+    disconnect: (): Promise<void> => ipcRenderer.invoke('serverConnection:disconnect'),
+    getState: (): Promise<{
+      serverUrl: string; email: string; token: string; modelCount: number
+      balance: number; expiresAt: number | null
+    } | null> => ipcRenderer.invoke('serverConnection:getState'),
   }
 }
 

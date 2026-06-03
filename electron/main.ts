@@ -35,6 +35,11 @@ import {
   saveAgentConfig,
   testAgentModel
 } from './agent/config'
+import {
+  connectToServer,
+  disconnectFromServer,
+  loadConnectionState
+} from './agent/serverConnection'
 import { createAppTray, hideToTray, markQuitting, shouldQuit, showWindow } from './desktop/tray'
 import { bindUpdater, checkForUpdates, getUpdateSnapshot, installUpdate } from './desktop/updater'
 import { imManager } from './im/manager'
@@ -468,6 +473,20 @@ ipcMain.handle('agent:loadSnapshot', async (_e, workspaceRoot: string) => {
 
 ipcMain.handle('agent:saveSnapshot', async (_e, workspaceRoot: string, snapshot) => {
   await saveAgentSnapshot(workspaceRoot, snapshot)
+})
+
+// ─── Server Connection IPC ────────────────────────────────────────────────────
+
+ipcMain.handle('serverConnection:connect', async (_e, serverUrl: string, email: string, password: string) => {
+  return connectToServer(serverUrl, email, password)
+})
+
+ipcMain.handle('serverConnection:disconnect', async () => {
+  await disconnectFromServer()
+})
+
+ipcMain.handle('serverConnection:getState', async () => {
+  return loadConnectionState()
 })
 
 // ─── Window IPC ───────────────────────────────────────────────────────────────

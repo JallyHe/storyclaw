@@ -8,6 +8,7 @@ import {
   createDraftModel,
   getProviderGroupId
 } from './modelCatalog'
+import { ServerConnectionPanel } from './ServerConnectionPanel'
 
 export function ModelSettingsPanel() {
   const [config, setConfig] = useState<AgentConfigSnapshot | null>(null)
@@ -239,6 +240,7 @@ export function ModelSettingsPanel() {
       )}
 
       {!draft && status && <div className="set-status">{status}</div>}
+      <ServerConnectionPanel />
     </div>
   )
 }
