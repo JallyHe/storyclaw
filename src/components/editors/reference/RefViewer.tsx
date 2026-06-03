@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { workspaceIpc } from '@/ipc/workspace'
+import { FindBar } from '@/components/editors/FindBar'
+import type { FindHandlers } from '@/components/editors/FindBar'
+import { injectDomHighlights, clearDomSpans } from '@/components/editors/prosemirror/RichTextEditor'
 import './reference.css'
 
 interface Props { filePath: string }
@@ -29,10 +32,46 @@ export function RefViewer({ filePath }: Props) {
   const [docxKey, setDocxKey] = useState(0)
   const [docxFallbackText, setDocxFallbackText] = useState('')
   const [workerReady, setWorkerReady] = useState(false)
+  const [showDocxFind, setShowDocxFind] = useState(false)
   const docxRef = useRef<HTMLDivElement>(null)
   const docxStyleRef = useRef<HTMLDivElement>(null)
+  const docxSpansRef = useRef<HTMLSpanElement[]>([])
+  const docxCurrentRef = useRef(0)
 
   const fileName = filePath.split(/[\\/]/).pop() ?? filePath
+
+  const docxFindHandlers = useMemo<FindHandlers>(() => ({
+    find(query, opts) {
+      clearDomSpans(docxSpansRef.current)
+      docxSpansRef.current = []
+      docxCurrentRef.current = 0
+      if (!query || !docxRef.current) return 0
+      const spans = injectDomHighlights(docxRef.current, query, opts)
+      docxSpansRef.current = spans
+      return spans.length
+    },
+    next() {
+      const spans = docxSpansRef.current
+      if (!spans.length) return
+      spans[docxCurrentRef.current].className = 'find-highlight'
+      docxCurrentRef.current = (docxCurrentRef.current + 1) % spans.length
+      spans[docxCurrentRef.current].className = 'find-highlight-current'
+      spans[docxCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+    },
+    prev() {
+      const spans = docxSpansRef.current
+      if (!spans.length) return
+      spans[docxCurrentRef.current].className = 'find-highlight'
+      docxCurrentRef.current = (docxCurrentRef.current - 1 + spans.length) % spans.length
+      spans[docxCurrentRef.current].className = 'find-highlight-current'
+      spans[docxCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+    },
+    clear() {
+      clearDomSpans(docxSpansRef.current)
+      docxSpansRef.current = []
+      docxCurrentRef.current = 0
+    }
+  }), [])
 
   useEffect(() => {
     const ext = fileName.split('.').pop()?.toLowerCase()
@@ -167,10 +206,25 @@ export function RefViewer({ filePath }: Props) {
 
   if (mode === 'docx') {
     return (
-      <div className="ref-viewer">
+      <div
+        className="ref-viewer"
+        style={{ position: 'relative' }}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setShowDocxFind(true) }
+        }}
+        tabIndex={-1}
+      >
+        {showDocxFind && (
+          <FindBar
+            handlers={docxFindHandlers}
+            allowReplace={false}
+            onClose={() => { docxFindHandlers.clear(); setShowDocxFind(false) }}
+          />
+        )}
         <div className="ref-header">
           <span className="ref-filename">{fileName}</span>
           <span className="ref-badge">DOCX</span>
+          <button className="ref-find-btn" title="查找 (Ctrl+F)" onClick={() => setShowDocxFind(v => !v)}>搜</button>
         </div>
         <div className="ref-docx" key={docxKey}>
           <div ref={docxStyleRef} />
@@ -197,8 +251,11 @@ function PdfPreview({ url, totalPages, fileName }: { url: string; totalPages: nu
   const [pageInput, setPageInput] = useState('1')
   const [pdfDoc, setPdfDoc] = useState<any>(null)
   const [pdfScale, setPdfScale] = useState(1.25)
+  const [showPdfFind, setShowPdfFind] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<Array<HTMLDivElement | null>>([])
+  const pdfMatchPagesRef = useRef<number[]>([])
+  const pdfFindCurrentRef = useRef(0)
 
   useEffect(() => {
     if (!url) return
@@ -222,6 +279,43 @@ function PdfPreview({ url, totalPages, fileName }: { url: string; totalPages: nu
     pageRefs.current[page - 1]?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }
 
+  const pdfFindHandlers = useMemo<FindHandlers>(() => ({
+    async find(query, opts) {
+      pdfMatchPagesRef.current = []
+      pdfFindCurrentRef.current = 0
+      if (!pdfDoc || !query) return 0
+      const needle = opts.caseSensitive ? query : query.toLowerCase()
+      const matches: number[] = []
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i)
+        const content = await page.getTextContent()
+        const pageText = (content.items as Array<{ str?: string }>)
+          .map(item => item.str ?? '').join('')
+        const haystack = opts.caseSensitive ? pageText : pageText.toLowerCase()
+        if (haystack.includes(needle)) matches.push(i)
+      }
+      pdfMatchPagesRef.current = matches
+      if (matches.length > 0) goToPage(matches[0])
+      return matches.length
+    },
+    next() {
+      const m = pdfMatchPagesRef.current
+      if (!m.length) return
+      pdfFindCurrentRef.current = (pdfFindCurrentRef.current + 1) % m.length
+      goToPage(m[pdfFindCurrentRef.current])
+    },
+    prev() {
+      const m = pdfMatchPagesRef.current
+      if (!m.length) return
+      pdfFindCurrentRef.current = (pdfFindCurrentRef.current - 1 + m.length) % m.length
+      goToPage(m[pdfFindCurrentRef.current])
+    },
+    clear() {
+      pdfMatchPagesRef.current = []
+      pdfFindCurrentRef.current = 0
+    }
+  }), [pdfDoc, goToPage])
+
   const updateCurrentPage = () => {
     const scrollEl = scrollRef.current
     if (!scrollEl) return
@@ -243,10 +337,25 @@ function PdfPreview({ url, totalPages, fileName }: { url: string; totalPages: nu
   }
 
   return (
-    <div className="ref-pdf">
+    <div
+      className="ref-pdf"
+      style={{ position: 'relative' }}
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setShowPdfFind(true) }
+      }}
+      tabIndex={-1}
+    >
+      {showPdfFind && (
+        <FindBar
+          handlers={pdfFindHandlers}
+          allowReplace={false}
+          onClose={() => { pdfFindHandlers.clear(); setShowPdfFind(false) }}
+        />
+      )}
       <div className="ref-header">
         <span className="ref-filename">{fileName}</span>
         <span className="ref-badge">PDF</span>
+        <button className="ref-find-btn" title="查找 (Ctrl+F)" onClick={() => setShowPdfFind(v => !v)}>搜</button>
         {totalPages > 0 && (
           <div className="ref-pdf-controls">
             <button disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>上一页</button>

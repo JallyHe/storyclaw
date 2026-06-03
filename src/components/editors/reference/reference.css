@@ -218,3 +218,16 @@
   background: var(--bg-1);
   border-radius: 4px;
 }
+
+.ref-find-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-0);
+  color: var(--text-1);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ref-find-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
