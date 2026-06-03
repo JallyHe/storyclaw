@@ -12,7 +12,10 @@ import {
 } from '../../src/editors/screenplay/formatTemplates'
 
 function storeDir(): string {
-  return path.join(app.getPath('userData'), 'screenplay')
+  const userData = typeof app?.getPath === 'function'
+    ? app.getPath('userData')
+    : path.join(process.cwd(), '.tmp-storyclaw-user-data')
+  return path.join(userData, 'screenplay')
 }
 function storePath(): string {
   return path.join(storeDir(), 'format-templates.json')

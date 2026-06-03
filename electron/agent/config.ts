@@ -43,7 +43,7 @@ export function getAgentConfigPaths(workspaceRoot = '') {
   }
 }
 
-export async function loadAgentConfig(): Promise<AgentConfigSnapshot> {
+export async function loadAgentConfig(_workspaceRoot?: string): Promise<AgentConfigSnapshot> {
   const paths = getAgentConfigPaths()
   try {
     const raw = await fs.readFile(paths.configJson, 'utf8')
@@ -56,8 +56,11 @@ export async function loadAgentConfig(): Promise<AgentConfigSnapshot> {
 }
 
 export async function saveAgentConfig(
-  config: AgentConfigSnapshot
+  configOrWorkspaceRoot: AgentConfigSnapshot | string,
+  maybeConfig?: AgentConfigSnapshot
 ): Promise<AgentConfigSnapshot> {
+  const config = typeof configOrWorkspaceRoot === 'string' ? maybeConfig : configOrWorkspaceRoot
+  if (!config) return defaultConfig()
   const normalized = normalizeConfig(config)
   const paths = getAgentConfigPaths()
   // Global dirs for model config
@@ -67,7 +70,7 @@ export async function saveAgentConfig(
   return normalized
 }
 
-export async function listConfiguredAgentModels(): Promise<AgentModelOption[]> {
+export async function listConfiguredAgentModels(_workspaceRoot?: string): Promise<AgentModelOption[]> {
   const config = await loadAgentConfig()
   return config.models.map(model => ({
     id: model.id,

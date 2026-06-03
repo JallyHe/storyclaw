@@ -10,10 +10,14 @@ describe('agent mode policy', () => {
       'read_screenplay',
       'read_selection',
       'read_reference',
+      'match_screenplay_format',
+      'apply_format_template',
       'write_screenplay',
-      'spawn_subagent'
+      'spawn_subagent',
+      'save_format_template'
     ])
     expect(() => assertToolAllowed('craft', 'write_screenplay')).not.toThrow()
+    expect(() => assertToolAllowed('craft', 'save_format_template')).not.toThrow()
     expect(() => assertToolAllowed('craft', 'spawn_subagent')).not.toThrow()
   })
 
@@ -27,9 +31,12 @@ describe('agent mode policy', () => {
       'list_workspace',
       'read_screenplay',
       'read_selection',
-      'read_reference'
+      'read_reference',
+      'match_screenplay_format',
+      'apply_format_template'
     ])
     expect(() => assertToolAllowed('plan', 'write_screenplay')).toThrow(/Plan mode/)
+    expect(() => assertToolAllowed('plan', 'save_format_template')).toThrow(/Plan mode/)
   })
 
   it('keeps ask mode read-only and concise', () => {
@@ -37,9 +44,12 @@ describe('agent mode policy', () => {
       'list_workspace',
       'read_screenplay',
       'read_selection',
-      'read_reference'
+      'read_reference',
+      'match_screenplay_format',
+      'apply_format_template'
     ])
     expect(getModeConfig('ask').systemSuffix).toContain('只回答问题')
     expect(() => assertToolAllowed('ask', 'write_screenplay')).toThrow(/Ask mode/)
+    expect(() => assertToolAllowed('ask', 'save_format_template')).toThrow(/Ask mode/)
   })
 })
