@@ -93,7 +93,16 @@ export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, childre
       </div>
 
       {/* ── Body ────────────────────────────────────────────── */}
-      <div className="doc-shell-body">
+      <div className="doc-shell-body" style={{ position: 'relative' }}>
+        {/* FindBar — floats over the body, outside the scroll canvas so it doesn't scroll away */}
+        {findHandlers && showFind && (
+          <FindBar
+            handlers={findHandlers}
+            allowReplace={!!findHandlers.replace}
+            onClose={() => { findHandlers.clear(); setShowFind(false) }}
+            openWithReplace={openWithReplace}
+          />
+        )}
         {/* Outline panel — always in DOM, width-animates open/closed */}
         {hasOutline && (
           <nav className={`doc-outline-panel${panelOpen ? '' : ' collapsed'}`}>
@@ -129,7 +138,6 @@ export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, childre
         {/* Canvas / scroll area */}
         <div
           className="doc-shell-canvas"
-          style={{ position: 'relative' }}
           onKeyDown={findHandlers ? (e: React.KeyboardEvent) => {
             const ctrl = e.ctrlKey || e.metaKey
             if (ctrl && e.key === 'f') { e.preventDefault(); setShowFind(true) }
@@ -137,14 +145,6 @@ export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, childre
           } : undefined}
           tabIndex={findHandlers ? -1 : undefined}
         >
-          {findHandlers && showFind && (
-            <FindBar
-              handlers={findHandlers}
-              allowReplace={!!findHandlers.replace}
-              onClose={() => { findHandlers.clear(); setShowFind(false) }}
-              openWithReplace={openWithReplace}
-            />
-          )}
           <div
             className="doc-shell-canvas-inner"
             style={{ '--doc-zoom': zoom / 100 } as React.CSSProperties}

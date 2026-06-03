@@ -8,6 +8,7 @@ import { baseKeymap } from 'prosemirror-commands'
 import { markdownToRichTextDoc, richTextDocToMarkdown } from '@/editors/richtext/markdown'
 import { htmlToRichTextDoc, richTextDocToHtml } from '@/editors/richtext/html'
 import { richTextSchema } from '@/editors/richtext/schema'
+import { createFindPlugin, findPluginKey, collectDocPositions, scrollFindMatchIntoView } from '@/editors/findPlugin'
 import './prosemirror.css'
 
 export interface RichTextHeading {
@@ -69,11 +70,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const viewRef        = useRef<EditorView | null>(null)
   const latestValueRef = useRef(value)
   const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const findSpansRef   = useRef<HTMLSpanElement[]>([])
-  const findDocPosRef  = useRef<Array<{ from: number; to: number }>>([])
-  const findCurrentRef = useRef(0)
-  const findQueryRef   = useRef('')
-  const findOptsRef    = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
+  const findQueryRef = useRef('')
+  const findOptsRef  = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
 
   useEffect(() => { latestValueRef.current = value }, [value])
 
@@ -85,6 +83,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       ),
       plugins: [
         history(),
+        createFindPlugin(),
         keymap({ 'Mod-z': undo, 'Mod-y': redo, 'Mod-Shift-z': redo }),
         keymap(baseKeymap)
       ]
@@ -197,50 +196,43 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     },
     findInEditor(query, opts) {
       const view = viewRef.current
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
-      findCurrentRef.current = 0
       findQueryRef.current = query
       findOptsRef.current = opts
-      if (!view || !query) return 0
-      // Collect ProseMirror document positions
-      findDocPosRef.current = collectDocPositions(view.state.doc, query, opts)
-      // Inject DOM highlight spans
-      findSpansRef.current = injectDomHighlights(view.dom as HTMLElement, query, opts)
-      if (findSpansRef.current[0]) findSpansRef.current[0].scrollIntoView({ block: 'center', behavior: 'smooth' })
-      return findDocPosRef.current.length
+      if (!view) return 0
+      const matches = query ? collectDocPositions(view.state.doc, query, opts) : []
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches, current: 0 }))
+      if (matches[0]) scrollFindMatchIntoView(view, matches[0])
+      return matches.length
     },
     findNext() {
-      const spans = findSpansRef.current
-      if (!spans.length) return
-      spans[findCurrentRef.current].className = 'find-highlight'
-      findCurrentRef.current = (findCurrentRef.current + 1) % spans.length
-      spans[findCurrentRef.current].className = 'find-highlight-current'
-      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+      const view = viewRef.current
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const current = (s.current + 1) % s.matches.length
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: s.matches, current }))
+      scrollFindMatchIntoView(view, s.matches[current])
     },
     findPrev() {
-      const spans = findSpansRef.current
-      if (!spans.length) return
-      spans[findCurrentRef.current].className = 'find-highlight'
-      findCurrentRef.current = (findCurrentRef.current - 1 + spans.length) % spans.length
-      spans[findCurrentRef.current].className = 'find-highlight-current'
-      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+      const view = viewRef.current
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const current = (s.current - 1 + s.matches.length) % s.matches.length
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: s.matches, current }))
+      scrollFindMatchIntoView(view, s.matches[current])
     },
     replaceMatch(replacement) {
       const view = viewRef.current
-      const positions = findDocPosRef.current
-      if (!view || !positions.length) return
-      const { from, to } = positions[findCurrentRef.current]
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
-      const node = replacement ? view.state.schema.text(replacement) : null
-      const tr = node
-        ? view.state.tr.replaceWith(from, to, node)
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const { from, to } = s.matches[s.current]
+      const tr = replacement
+        ? view.state.tr.replaceWith(from, to, view.state.schema.text(replacement))
         : view.state.tr.delete(from, to)
+      tr.setMeta(findPluginKey, { matches: [], current: 0 })
       view.dispatch(tr)
-      // Re-run find to update highlights and positions
       this.findInEditor(findQueryRef.current, findOptsRef.current)
     },
     replaceAllMatches(query, replacement, opts) {
@@ -248,23 +240,21 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       if (!view || !query) return 0
       const positions = collectDocPositions(view.state.doc, query, opts)
       if (!positions.length) return 0
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
-      // Replace from end to start to keep earlier positions valid
       const sorted = [...positions].sort((a, b) => b.from - a.from)
       let tr = view.state.tr
       for (const { from, to } of sorted) {
-        const node = replacement ? view.state.schema.text(replacement) : null
-        tr = node ? tr.replaceWith(from, to, node) : tr.delete(from, to)
+        tr = replacement
+          ? tr.replaceWith(from, to, view.state.schema.text(replacement))
+          : tr.delete(from, to)
       }
+      tr.setMeta(findPluginKey, { matches: [], current: 0 })
       view.dispatch(tr)
       return positions.length
     },
     clearHighlights() {
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
+      const view = viewRef.current
+      if (!view) return
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: [], current: 0 }))
     }
   }), [])
 
@@ -278,85 +268,6 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   // No toolbar rendered here — parent is responsible
   return <div ref={mountRef} />
 })
-
-// ── Find/replace helpers (also used by ScreenplayProseMirrorEditor) ──────────
-
-export function collectDocPositions(
-  doc: import('prosemirror-model').Node,
-  query: string,
-  opts: { caseSensitive: boolean }
-): Array<{ from: number; to: number }> {
-  const results: Array<{ from: number; to: number }> = []
-  const needle = opts.caseSensitive ? query : query.toLowerCase()
-  doc.descendants((node, pos) => {
-    if (!node.isText || !node.text) return
-    const text = node.text
-    const haystack = opts.caseSensitive ? text : text.toLowerCase()
-    let idx = 0
-    while (true) {
-      const found = haystack.indexOf(needle, idx)
-      if (found === -1) break
-      results.push({ from: pos + found, to: pos + found + needle.length })
-      idx = found + 1
-    }
-  })
-  return results
-}
-
-export function injectDomHighlights(
-  container: HTMLElement,
-  query: string,
-  opts: { caseSensitive: boolean }
-): HTMLSpanElement[] {
-  const spans: HTMLSpanElement[] = []
-  const needle = opts.caseSensitive ? query : query.toLowerCase()
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  const nodes: Text[] = []
-  let node: Node | null
-  // Collect first (TreeWalker invalidates if DOM changes mid-walk)
-  while ((node = walker.nextNode())) nodes.push(node as Text)
-  for (const textNode of nodes) {
-    const text = textNode.nodeValue ?? ''
-    const haystack = opts.caseSensitive ? text : text.toLowerCase()
-    const matchOffsets: Array<{ start: number; end: number }> = []
-    let pos = 0
-    while (true) {
-      const idx = haystack.indexOf(needle, pos)
-      if (idx === -1) break
-      matchOffsets.push({ start: idx, end: idx + needle.length })
-      pos = idx + 1
-    }
-    if (!matchOffsets.length) continue
-    // Wrap matches inside this text node from end to start (to preserve offsets)
-    let current: Text = textNode
-    for (let i = matchOffsets.length - 1; i >= 0; i--) {
-      const { start, end } = matchOffsets[i]
-      try {
-        // Split at end, then at start
-        const after = current.splitText(end)
-        const match = current.splitText(start)
-        const span = document.createElement('span')
-        span.className = 'find-highlight'
-        match.parentNode!.insertBefore(span, after)
-        span.appendChild(match)
-        spans.unshift(span)
-        current = current  // before the match
-      } catch { /* skip */ }
-    }
-  }
-  if (spans[0]) spans[0].className = 'find-highlight-current'
-  return spans
-}
-
-export function clearDomSpans(spans: HTMLSpanElement[]) {
-  for (const span of spans) {
-    const parent = span.parentNode
-    if (!parent) continue
-    while (span.firstChild) parent.insertBefore(span.firstChild, span)
-    parent.removeChild(span)
-    if (parent.nodeType === Node.ELEMENT_NODE) (parent as Element).normalize()
-  }
-}
 
 // ── Standalone toolbar component (reusable) ────────────────────────────────
 

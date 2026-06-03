@@ -15,7 +15,7 @@ import { useCopilotDraftStore, useEditorViewCacheStore, useTabsStore, useUiStore
 import { revealMatchInElement } from '@/editors/revealMatch'
 import { workspaceRelativePath } from '@/components/copilot/currentDocumentContext'
 import type { SelectionReference } from '@/components/copilot/selectionReference'
-import { collectDocPositions, injectDomHighlights, clearDomSpans } from './RichTextEditor'
+import { createFindPlugin, findPluginKey, collectDocPositions, scrollFindMatchIntoView } from '@/editors/findPlugin'
 import type { FindHandlers } from '@/components/editors/FindBar'
 import './prosemirror.css'
 
@@ -98,11 +98,8 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const scrollRef  = useRef<HTMLDivElement>(null)
   const viewRef    = useRef<EditorView | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const findSpansRef  = useRef<HTMLSpanElement[]>([])
-  const findDocPosRef = useRef<Array<{ from: number; to: number }>>([])
-  const findCurrentRef = useRef(0)
-  const findQueryRef   = useRef('')
-  const findOptsRef    = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
+  const findQueryRef = useRef('')
+  const findOptsRef  = useRef<{ caseSensitive: boolean }>({ caseSensitive: false })
   const latestRef = useRef({ file, onSave })
   const [editorRevision, setEditorRevision] = useState(0)
 
@@ -150,72 +147,65 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   const findHandlers = useMemo<FindHandlers>(() => ({
     find(query, opts) {
       const view = viewRef.current
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
-      findCurrentRef.current = 0
       findQueryRef.current = query
       findOptsRef.current = opts
-      if (!view || !query) return 0
-      findDocPosRef.current = collectDocPositions(view.state.doc, query, opts)
-      findSpansRef.current = injectDomHighlights(view.dom as HTMLElement, query, opts)
-      if (findSpansRef.current[0]) findSpansRef.current[0].scrollIntoView({ block: 'center', behavior: 'smooth' })
-      return findDocPosRef.current.length
+      if (!view) return 0
+      const matches = query ? collectDocPositions(view.state.doc, query, opts) : []
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches, current: 0 }))
+      if (matches[0]) scrollFindMatchIntoView(view, matches[0])
+      return matches.length
     },
     next() {
-      const spans = findSpansRef.current
-      if (!spans.length) return
-      spans[findCurrentRef.current].className = 'find-highlight'
-      findCurrentRef.current = (findCurrentRef.current + 1) % spans.length
-      spans[findCurrentRef.current].className = 'find-highlight-current'
-      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+      const view = viewRef.current
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const current = (s.current + 1) % s.matches.length
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: s.matches, current }))
+      scrollFindMatchIntoView(view, s.matches[current])
     },
     prev() {
-      const spans = findSpansRef.current
-      if (!spans.length) return
-      spans[findCurrentRef.current].className = 'find-highlight'
-      findCurrentRef.current = (findCurrentRef.current - 1 + spans.length) % spans.length
-      spans[findCurrentRef.current].className = 'find-highlight-current'
-      spans[findCurrentRef.current].scrollIntoView({ block: 'center', behavior: 'smooth' })
+      const view = viewRef.current
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const current = (s.current - 1 + s.matches.length) % s.matches.length
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: s.matches, current }))
+      scrollFindMatchIntoView(view, s.matches[current])
     },
     replace(replacement) {
       const view = viewRef.current
-      const positions = findDocPosRef.current
-      if (!view || !positions.length) return
-      const { from, to } = positions[findCurrentRef.current]
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
-      const node = replacement ? view.state.schema.text(replacement) : null
-      const tr = node
-        ? view.state.tr.replaceWith(from, to, node)
+      if (!view) return
+      const s = findPluginKey.getState(view.state)
+      if (!s || !s.matches.length) return
+      const { from, to } = s.matches[s.current]
+      const tr = replacement
+        ? view.state.tr.replaceWith(from, to, view.state.schema.text(replacement))
         : view.state.tr.delete(from, to)
+      tr.setMeta(findPluginKey, { matches: [], current: 0 })
       view.dispatch(tr)
-      // Re-run find to refresh
-      const count = this.find(findQueryRef.current, findOptsRef.current)
-      return count
+      this.find(findQueryRef.current, findOptsRef.current)
     },
     replaceAll(query, replacement, opts) {
       const view = viewRef.current
       if (!view || !query) return 0
       const positions = collectDocPositions(view.state.doc, query, opts)
       if (!positions.length) return 0
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
       const sorted = [...positions].sort((a, b) => b.from - a.from)
       let tr = view.state.tr
       for (const { from, to } of sorted) {
-        const node = replacement ? view.state.schema.text(replacement) : null
-        tr = node ? tr.replaceWith(from, to, node) : tr.delete(from, to)
+        tr = replacement
+          ? tr.replaceWith(from, to, view.state.schema.text(replacement))
+          : tr.delete(from, to)
       }
+      tr.setMeta(findPluginKey, { matches: [], current: 0 })
       view.dispatch(tr)
       return positions.length
     },
     clear() {
-      clearDomSpans(findSpansRef.current)
-      findSpansRef.current = []
-      findDocPosRef.current = []
+      const view = viewRef.current
+      if (!view) return
+      view.dispatch(view.state.tr.setMeta(findPluginKey, { matches: [], current: 0 }))
     }
   }), [])
 
@@ -241,7 +231,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     const doc   = screenplaySchema.nodeFromJSON(epFileToScreenplayDoc(displayedFile, { includeEpisodeHeadings: true }))
     let state = EditorState.create({
       doc,
-      plugins: readonly ? [] : createScreenplayPlugins()
+      plugins: readonly ? [] : [...createScreenplayPlugins(), createFindPlugin()]
     })
     const cachedState = useEditorViewCacheStore.getState().getScreenplayState(filePath)
     if (cachedState) {

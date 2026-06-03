@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { workspaceIpc } from '@/ipc/workspace'
 import { FindBar } from '@/components/editors/FindBar'
 import type { FindHandlers } from '@/components/editors/FindBar'
-import { injectDomHighlights, clearDomSpans } from '@/components/editors/prosemirror/RichTextEditor'
+import { injectDomHighlights, clearDomSpans } from '@/editors/domFind'
 import './reference.css'
 
 interface Props { filePath: string }
