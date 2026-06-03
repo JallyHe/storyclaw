@@ -15,6 +15,7 @@ import type {
   UpdateSnapshot,
   UploadedReference
 } from '../src/types'
+import type { IMConfigSnapshot, IMConversationEvent, IMPlatform, IMStatusSnapshot } from '../src/im/types'
 
 const api = {
   // workspace
@@ -136,6 +137,21 @@ const api = {
     onStatus: (cb: (snapshot: UpdateSnapshot) => void) => {
       ipcRenderer.on('updater:status', (_e, snapshot) => cb(snapshot))
       return () => ipcRenderer.removeAllListeners('updater:status')
+    }
+  },
+  im: {
+    getConfig: (): Promise<IMConfigSnapshot> => ipcRenderer.invoke('im:getConfig'),
+    saveConfig: (config: IMConfigSnapshot): Promise<IMConfigSnapshot> => ipcRenderer.invoke('im:saveConfig', config),
+    getStatuses: (): Promise<IMStatusSnapshot[]> => ipcRenderer.invoke('im:getStatuses'),
+    start: (platform: IMPlatform): Promise<IMStatusSnapshot> => ipcRenderer.invoke('im:start', platform),
+    stop: (platform: IMPlatform): Promise<IMStatusSnapshot> => ipcRenderer.invoke('im:stop', platform),
+    onStatus: (cb: (snapshot: IMStatusSnapshot) => void) => {
+      ipcRenderer.on('im:status', (_e, snapshot) => cb(snapshot))
+      return () => ipcRenderer.removeAllListeners('im:status')
+    },
+    onMessage: (cb: (event: IMConversationEvent) => void) => {
+      ipcRenderer.on('im:message', (_e, event) => cb(event))
+      return () => ipcRenderer.removeAllListeners('im:message')
     }
   }
 }

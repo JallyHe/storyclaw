@@ -38,6 +38,9 @@ import {
 } from './agent/config'
 import { createAppTray, hideToTray, markQuitting, shouldQuit, showWindow } from './desktop/tray'
 import { bindUpdater, checkForUpdates, getUpdateSnapshot, installUpdate } from './desktop/updater'
+import { imManager } from './im/manager'
+import { loadIMConfig } from './im/config'
+import type { IMConfigSnapshot, IMPlatform } from '../src/im/types'
 import {
   compareVersions,
   compareWorkingFile,
@@ -189,6 +192,7 @@ async function createWindow(): Promise<void> {
   })
   bindWindowStateEvents(win)
   bindUpdater(win)
+  imManager.bindWindow(win)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown') {
@@ -518,6 +522,28 @@ ipcMain.handle('updater:install', () => {
   installUpdate()
 })
 
+// ─── IM (多平台接入) IPC ────────────────────────────────────────────────────────
+
+ipcMain.handle('im:getConfig', async () => {
+  return loadIMConfig()
+})
+
+ipcMain.handle('im:saveConfig', async (_e, config: IMConfigSnapshot) => {
+  return imManager.applyConfig(config)
+})
+
+ipcMain.handle('im:getStatuses', () => {
+  return imManager.getAllStatuses()
+})
+
+ipcMain.handle('im:start', async (_e, platform: IMPlatform) => {
+  return imManager.startPlatform(platform)
+})
+
+ipcMain.handle('im:stop', async (_e, platform: IMPlatform) => {
+  return imManager.stopPlatform(platform)
+})
+
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
@@ -526,6 +552,8 @@ app.whenReady().then(() => {
   if (app.isPackaged) {
     setTimeout(() => { void checkForUpdates() }, 3000)
   }
+  // 启动已启用的 IM 平台（机器人在用户打开工作区后才能基于项目回答）
+  setTimeout(() => { void imManager.startEnabled() }, 1500)
   app.on('activate', () => {
     if (win) {
       showWindow(win)

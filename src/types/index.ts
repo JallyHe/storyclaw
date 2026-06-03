@@ -162,7 +162,7 @@ export interface AgentResources {
 // ─── UI state ─────────────────────────────────────────────────────────────────
 
 export type AppView = 'editor' | 'agent'
-export type LeftPanel = 'explorer' | 'search' | 'scm'
+export type LeftPanel = 'explorer' | 'search' | 'scm' | 'imbot'
 export type AgentMode = 'craft' | 'plan' | 'ask'
 export type ThemeKey = 'dark' | 'light'
 

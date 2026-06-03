@@ -18,14 +18,14 @@ const DISPATCHABLE = [
 const CATEGORIES = ['creative', 'setting', 'writing', 'review']
 
 function frontmatterName(md: string): string | undefined {
-  const m = md.match(/^---\n([\s\S]*?)\n---/)
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!m) return undefined
   const line = m[1].split('\n').find(l => l.startsWith('name:'))
   return line?.slice('name:'.length).trim()
 }
 
 function frontmatterField(md: string, field: string): string | undefined {
-  const m = md.match(/^---\n([\s\S]*?)\n---/)
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!m) return undefined
   const line = m[1].split('\n').find(l => l.startsWith(`${field}:`))
   return line?.slice(`${field}:`.length).trim().replace(/^"|"$/g, '')

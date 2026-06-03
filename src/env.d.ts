@@ -15,6 +15,7 @@ import type {
   UpdateSnapshot,
   UploadedReference
 } from './types'
+import type { IMConfigSnapshot, IMConversationEvent, IMPlatform, IMStatusSnapshot } from './im/types'
 
 declare global {
 interface Window {
@@ -90,6 +91,15 @@ interface Window {
         check(): Promise<UpdateSnapshot>
         install(): Promise<void>
         onStatus(cb: (snapshot: UpdateSnapshot) => void): () => void
+      }
+      im: {
+        getConfig(): Promise<IMConfigSnapshot>
+        saveConfig(config: IMConfigSnapshot): Promise<IMConfigSnapshot>
+        getStatuses(): Promise<IMStatusSnapshot[]>
+        start(platform: IMPlatform): Promise<IMStatusSnapshot>
+        stop(platform: IMPlatform): Promise<IMStatusSnapshot>
+        onStatus(cb: (snapshot: IMStatusSnapshot) => void): () => void
+        onMessage(cb: (event: IMConversationEvent) => void): () => void
       }
     }
   }

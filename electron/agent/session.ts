@@ -46,3 +46,21 @@ export function getSession(sessionId?: string) {
   if (sessionId) return runtimePool.get(sessionId)?.session ?? null
   return [...runtimePool.values()][0]?.session ?? null
 }
+
+/**
+ * IM 机器人专用：在当前工作区跑一次只读提问并返回助手回复文本。
+ * 复用独立的隐藏 sessionId，避免污染前端会话。需要先打开工作区。
+ */
+const IM_BOT_SESSION_ID = '__im_bot__'
+
+export async function runHeadlessPrompt(text: string, onDelta?: (full: string) => void): Promise<string> {
+  if (!cachedWorkspaceRoot || !cachedWin) {
+    throw new Error('请先在 StoryClaw 中打开一个项目工作区，机器人才能基于项目回答。')
+  }
+  const rt = await getOrCreateRuntime(IM_BOT_SESSION_ID)
+  return rt.promptOnce(text, 'ask', onDelta)
+}
+
+export function isWorkspaceReady(): boolean {
+  return Boolean(cachedWorkspaceRoot && cachedWin)
+}

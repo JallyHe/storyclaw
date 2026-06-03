@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { agentIpc } from '@/ipc/agent'
 import { workspaceIpc } from '@/ipc/workspace'
-import { useSessionsStore, useWorkspaceStore } from '@/store'
+import { useSessionsStore, useWorkspaceStore, useUiStore } from '@/store'
 import type { AgentConfigSnapshot, AgentMode, AgentModelConfig, AgentModelOption, AgentProviderApi, FileNode, FolderNode, AgentResources } from '@/types'
 import { FILE_KIND, Ic } from '@/components/icons'
 
@@ -51,16 +51,6 @@ const AGENT_MODES = [
   { id: 'plan'  as AgentMode, name: 'Plan',  icon: Ic.bulb,   color: '#8b7cf6', desc: '先规划、后执行，不直接改动文件。' },
   { id: 'ask'   as AgentMode, name: 'Ask',   icon: Ic.eye,    color: '#6f9bd1', desc: '只读模式——仅读取文件回答问题。' }
 ]
-
-const AGENT_PROVIDER_APIS: AgentProviderApi[] = [
-  'openai-completions',
-  'openai-responses',
-  'anthropic-messages',
-  'google-generative-ai'
-]
-
-const MODEL_INPUT_PRESETS = ['32K', '64K', '128K', '256K']
-const MODEL_OUTPUT_PRESETS = ['8K', '16K', '32K', '64K']
 
 const AGENT_PERMISSIONS = [
   { id: 'default', name: '默认权限', sub: '安全沙箱', icon: Ic.shield, desc: 'Agent 执行命令前需逐次授权。' },
@@ -160,31 +150,8 @@ function Dropdown({ id, open, setOpen, className = '', children, render }: {
   )
 }
 
-function createDraftModel(providerId: string, seed = Date.now()): AgentModelConfig {
-  const template = PROVIDER_TEMPLATE_MAP[providerId] ?? PROVIDER_TEMPLATE_MAP['custom-openai']
-  return {
-    id: `${providerId}-${seed}`,
-    providerId: template.providerId ?? template.id,
-    displayName: '',
-    model: '',
-    api: template.api,
-    baseUrl: template.baseUrl,
-    apiKey: template.id === 'ollama' ? 'ollama' : undefined,
-    enabled: true,
-    reasoning: false,
-    defaultMode: 'craft',
-    supportsTools: true,
-    supportsVision: false,
-    customProtocol: false
-  }
-}
-
 function getProviderLabel(providerId: string): string {
   return PROVIDER_TEMPLATE_MAP[providerId]?.name ?? PROVIDER_TEMPLATE_MAP['custom-openai'].name
-}
-
-function getProviderGroupId(providerId: string): string {
-  return PROVIDER_TEMPLATE_MAP[providerId] ? providerId : 'custom-openai'
 }
 
 function getConfigMessage(option: AgentModelOption | undefined): string {
@@ -209,15 +176,11 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const [model, setModel] = useState('')
   const [agentConfig, setAgentConfig] = useState<AgentConfigSnapshot | null>(null)
   const [modelList, setModelList] = useState<AgentModelOption[]>([])
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [selectedProviderId, setSelectedProviderId] = useState<string>('custom-openai')
-  const [draftModel, setDraftModel] = useState<AgentModelConfig | null>(null)
-  const [modelStatus, setModelStatus] = useState('')
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [showApiKey, setShowApiKey] = useState(false)
   const [permission, setPermission] = useState('default')
   const [listening, setListening] = useState(false)
+  const [interimTranscript, setInterimTranscript] = useState('')
+  const [voiceUnsupported, setVoiceUnsupported] = useState(false)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
   const [skillQuery, setSkillQuery] = useState('')
   const [resources, setResources] = useState<AgentResources>({ agents: [], skills: [] })
   const [hasContent, setHasContent] = useState(false)
@@ -232,6 +195,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const root = useWorkspaceStore(s => s.root)
   const tree = useWorkspaceStore(s => s.tree)
   const { addMessage, activeId } = useSessionsStore()
+  const openSettings = useUiStore(s => s.openSettings)
 
   const curMode = AGENT_MODES.find(item => item.id === mode) ?? AGENT_MODES[0]
   const curModelOption = modelList.find(item => item.id === model)
@@ -262,9 +226,6 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const filteredSkills = pickEntries.filter(entry => matchEntry(entry, skillQuery.toLowerCase()))
   const filteredSkillGroups = groupPickEntries(filteredSkills)
 
-  const savedModels = agentConfig?.models ?? []
-
-  const selectedProvider = PROVIDER_TEMPLATE_MAP[selectedProviderId] ?? PROVIDER_TEMPLATE_MAP['custom-openai']
 
   const treeIndex = useMemo(() => {
     const index: Record<string, FileNode | FolderNode> = {}
@@ -328,13 +289,6 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     const activeItem = listRef.current.querySelector('.atp-item.active') as HTMLElement | null
     if (activeItem) activeItem.scrollIntoView({ block: 'nearest' })
   }, [triggerIndex, trigger])
-
-  useEffect(() => {
-    if (!settingsOpen) return
-    const nextDraft = savedModels.find(item => item.id === draftModel?.id) ?? savedModels[0] ?? null
-    if (nextDraft && nextDraft.id !== draftModel?.id) setDraftModel({ ...nextDraft })
-    if (!nextDraft && draftModel?.providerId !== selectedProviderId) setDraftModel(createDraftModel(selectedProviderId))
-  }, [draftModel?.id, draftModel?.providerId, savedModels, selectedProviderId, settingsOpen])
 
   const sync = useCallback(() => {
     const editor = edRef.current
@@ -526,6 +480,82 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     }
   }, [root, uploading])
 
+  function insertVoiceText(text: string) {
+    const editor = edRef.current
+    if (!editor || !text.trim()) return
+    editor.focus()
+    // Place caret at end if not already inside
+    const sel = window.getSelection()
+    if (!sel || !editor.contains(sel.anchorNode)) {
+      const range = document.createRange()
+      range.selectNodeContents(editor)
+      range.collapse(false)
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+    }
+    document.execCommand('insertText', false, text.trim())
+    sync()
+    setTrigger(getTrigger())
+  }
+
+  const toggleVoice = useCallback(() => {
+    if (listening) {
+      recognitionRef.current?.stop()
+      recognitionRef.current = null
+      setListening(false)
+      setInterimTranscript('')
+      return
+    }
+
+    type SR = typeof SpeechRecognition
+    const SRCtor: SR | undefined =
+      (window as unknown as Record<string, unknown>).SpeechRecognition as SR |undefined ??
+      (window as unknown as Record<string, unknown>).webkitSpeechRecognition as SR | undefined
+
+    if (!SRCtor) {
+      setVoiceUnsupported(true)
+      setTimeout(() => setVoiceUnsupported(false), 3000)
+      return
+    }
+
+    const rec = new SRCtor()
+    rec.lang = navigator.language || 'zh-CN'
+    rec.continuous = false
+    rec.interimResults = true
+    rec.maxAlternatives = 1
+
+    rec.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result.isFinal) {
+          insertVoiceText(result[0].transcript)
+          setInterimTranscript('')
+        } else {
+          interim += result[0].transcript
+        }
+      }
+      if (interim) setInterimTranscript(interim)
+    }
+
+    rec.onerror = () => {
+      recognitionRef.current = null
+      setListening(false)
+      setInterimTranscript('')
+    }
+
+    rec.onend = () => {
+      recognitionRef.current = null
+      setListening(false)
+      setInterimTranscript('')
+    }
+
+    recognitionRef.current = rec
+    rec.start()
+    setListening(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening])
+
   const onInput = () => {
     setTrigger(getTrigger())
     sync()
@@ -599,120 +629,6 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     reloadModels(root)
   }
 
-  const openModelEditor = (target?: AgentModelConfig) => {
-    const providerId = target ? getProviderGroupId(target.providerId) : 'custom-openai'
-    setSelectedProviderId(providerId)
-    setDraftModel(target ? { ...target } : createDraftModel(providerId))
-    setAdvancedOpen(Boolean(target?.api || target?.baseUrl || target?.reasoning === true || target?.defaultMode !== 'craft' || target?.enabled === false))
-    setShowApiKey(false)
-    setEditorOpen(true)
-    setSettingsOpen(true)
-    setPop(null)
-    setModelStatus('')
-  }
-
-  const openModelSettings = () => {
-    setSettingsOpen(true)
-    setEditorOpen(false)
-    setPop(null)
-    setModelStatus('')
-  }
-
-  const saveModelSettings = async () => {
-    if (!root || !draftModel) return
-    const nextModels = agentConfig?.models.some(item => item.id === draftModel.id)
-      ? agentConfig.models.map(item => item.id === draftModel.id ? draftModel : item)
-      : [...(agentConfig?.models ?? []), draftModel]
-    const saved = await agentIpc.saveConfig(root, {
-      version: 1,
-      activeModelId: draftModel.id,
-      models: nextModels
-    })
-    setAgentConfig(saved)
-    setModel(saved.activeModelId)
-    setMode(draftModel.defaultMode)
-    setModelStatus('已保存并切换到当前模型。')
-    reloadModels(root)
-  }
-
-  const deleteDraftModel = async () => {
-    if (!root || !agentConfig || !draftModel) return
-    const nextModels = agentConfig.models.filter(item => item.id !== draftModel.id)
-    const nextActiveModelId = agentConfig.activeModelId === draftModel.id ? (nextModels[0]?.id ?? '') : agentConfig.activeModelId
-    const saved = await agentIpc.saveConfig(root, {
-      version: 1,
-      activeModelId: nextActiveModelId,
-      models: nextModels
-    })
-    setAgentConfig(saved)
-    setModel(saved.activeModelId)
-    const nextDraft = nextModels.find(item => item.providerId === selectedProviderId) ?? null
-    setDraftModel(nextDraft ? { ...nextDraft } : createDraftModel(selectedProviderId))
-    setModelStatus(nextModels.length === 0 ? '模型已删除，当前工作区暂无可用模型。' : '模型已删除。')
-    reloadModels(root)
-  }
-
-  const deleteModel = async (target: AgentModelConfig) => {
-    if (!root || !agentConfig) return
-    const nextModels = agentConfig.models.filter(item => item.id !== target.id)
-    const nextActiveModelId = agentConfig.activeModelId === target.id ? (nextModels[0]?.id ?? '') : agentConfig.activeModelId
-    const saved = await agentIpc.saveConfig(root, {
-      version: 1,
-      activeModelId: nextActiveModelId,
-      models: nextModels
-    })
-    setAgentConfig(saved)
-    setModel(saved.activeModelId)
-    setDraftModel(nextModels[0] ? { ...nextModels[0] } : createDraftModel(selectedProviderId))
-    setModelStatus(nextModels.length === 0 ? '模型已删除，当前工作区暂无可用模型。' : '模型已删除。')
-    reloadModels(root)
-  }
-
-  const testModel = async () => {
-    if (!root || !draftModel) return
-    setModelStatus('正在检查模型配置…')
-    const temporaryConfig: AgentConfigSnapshot = {
-      version: 1,
-      activeModelId: draftModel.id,
-      models: agentConfig?.models.some(item => item.id === draftModel.id)
-        ? agentConfig.models.map(item => item.id === draftModel.id ? draftModel : item)
-        : [...(agentConfig?.models ?? []), draftModel]
-    }
-    const saved = await agentIpc.saveConfig(root, temporaryConfig)
-    setAgentConfig(saved)
-    const result = await agentIpc.testModel(root, draftModel.id)
-    setModelStatus(result.message)
-    reloadModels(root)
-  }
-
-  const patchDraft = (patch: Partial<AgentModelConfig>) => {
-    setDraftModel(current => current ? { ...current, ...patch } : current)
-  }
-
-  const switchProvider = (providerId: string) => {
-    setSelectedProviderId(providerId)
-    const template = PROVIDER_TEMPLATE_MAP[providerId] ?? PROVIDER_TEMPLATE_MAP['custom-openai']
-    setDraftModel(current => current ? {
-      ...current,
-      providerId: template.providerId ?? template.id,
-      api: template.api,
-      baseUrl: template.baseUrl,
-      apiKey: current.apiKey ?? (template.id === 'ollama' ? 'ollama' : undefined)
-    } : createDraftModel(providerId))
-    setModelStatus('')
-  }
-
-  const createProviderModel = () => {
-    setDraftModel(createDraftModel(selectedProviderId))
-    setAdvancedOpen(false)
-    setShowApiKey(false)
-    setModelStatus('')
-    setEditorOpen(true)
-  }
-
-  const draftExists = Boolean(draftModel && agentConfig?.models.some(item => item.id === draftModel.id))
-  const draftConfigured = Boolean(draftModel?.apiKey || draftModel?.providerId === 'ollama')
-
   return (
     <div className={`acomposer${big ? ' big' : ''}`}>
       {root && modelWarning && (
@@ -739,7 +655,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
               border: 'none',
               cursor: 'pointer'
             }}
-            onClick={() => openModelSettings()}
+            onClick={() => openSettings('model')}
           >
             {hasSelectedModel ? '配置模型' : '添加模型'}
           </button>
@@ -909,10 +825,22 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
           {uploading ? <span className="ac-upload-spin" /> : <Ic.paperclip width={15} height={15} />}
         </button>
 
-        <button className={`ac-icon-btn${listening ? ' listening' : ''}`} title="语音输入" onClick={() => setListening(value => !value)}>
-          {listening && <span className="mic-pulse" />}
-          <Ic.mic width={15} height={15} />
-        </button>
+        <div className="ac-voice-wrap">
+          {listening && interimTranscript && (
+            <div className="ac-voice-interim">{interimTranscript}</div>
+          )}
+          {voiceUnsupported && (
+            <div className="ac-voice-interim ac-voice-err">当前环境不支持语音识别</div>
+          )}
+          <button
+            className={`ac-icon-btn${listening ? ' listening' : ''}`}
+            title={listening ? '点击停止录音' : '语音输入（点击开始录音）'}
+            onClick={toggleVoice}
+          >
+            {listening && <span className="mic-pulse" />}
+            <Ic.mic width={15} height={15} />
+          </button>
+        </div>
 
         {busy
           ? <button className="ac-send stop" onClick={stop} title="停止"><Ic.stop width={14} height={14} /></button>
@@ -997,7 +925,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
               {item.id === model && <span className="ac-opt-check"><Ic.check width={14} height={14} /></span>}
             </div>
           ))}
-          <div className="ac-skill-import" onClick={() => openModelSettings()}>
+          <div className="ac-skill-import" onClick={() => { setPop(null); openSettings('model') }}>
             <Ic.sliders width={14} height={14} /> 管理供应商与模型
           </div>
         </Dropdown>
@@ -1005,230 +933,6 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
 
       {(pop || trigger) && <div className="ac-backdrop" onClick={() => { setPop(null); setTrigger(null); setTriggerIndex(0); setMPath([]) }} />}
 
-      {settingsOpen && (
-        <div className="model-modal-backdrop" onClick={() => { setSettingsOpen(false); setEditorOpen(false) }}>
-          <div className="model-modal overview-modal" onClick={event => event.stopPropagation()}>
-            <div className="model-modal-head">
-              <div>
-                <h3>模型</h3>
-              </div>
-              <button className="model-close" onClick={() => { setSettingsOpen(false); setEditorOpen(false) }}>×</button>
-            </div>
-
-            <div className="overview-body">
-              <section className="overview-section">
-                <div className="overview-section-title">自定义模型</div>
-                <div className="overview-file-card">
-                  <div>
-                    <div className="overview-file-title">本地配置文件</div>
-                    <div className="overview-file-desc">管理写入到当前工作区 `.storyclaw/agent-models.json` 的本地自定义模型配置。</div>
-                  </div>
-                  <button className="provider-add-btn" type="button" onClick={createProviderModel}>
-                    <Ic.plus width={14} height={14} /> 添加模型
-                  </button>
-                </div>
-              </section>
-
-              <section className="overview-section">
-                <div className="overview-section-title">已保存模型</div>
-                <div className="overview-list">
-                  {savedModels.length === 0 && (
-                    <div className="provider-model-empty">还没有配置任何模型。点击上方“添加模型”开始配置。</div>
-                  )}
-                  {savedModels.map(item => {
-                    const option = modelList.find(modelOption => modelOption.id === item.id)
-                    return (
-                      <div key={item.id} className="overview-model-row">
-                        <button
-                          type="button"
-                          className="overview-model-main"
-                          onClick={() => {
-                            setSelectedProviderId(getProviderGroupId(item.providerId))
-                            setDraftModel({ ...item })
-                            setAdvancedOpen(true)
-                            setEditorOpen(true)
-                            setShowApiKey(false)
-                            setModelStatus('')
-                          }}
-                        >
-                          <span className={`overview-model-indicator${option?.configured ? ' ok' : ''}`}>
-                            {option?.configured ? <Ic.checkCircle width={16} height={16} /> : <Ic.shield width={16} height={16} />}
-                          </span>
-                          <span className="overview-model-copy">
-                            <span className="overview-model-name">{item.displayName || item.model || '未命名模型'}</span>
-                            <span className="overview-model-sub">{getProviderLabel(getProviderGroupId(item.providerId))}</span>
-                          </span>
-                          {agentConfig?.activeModelId === item.id && <span className="config-tag current">当前</span>}
-                        </button>
-                        <div className="overview-model-actions">
-                          <button type="button" title="编辑模型" onClick={() => openModelEditor(item)}>
-                            <Ic.edit width={16} height={16} />
-                          </button>
-                          <button type="button" title="删除模型" onClick={() => void deleteModel(item)}>
-                            <Ic.x width={16} height={16} />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            </div>
-
-            {editorOpen && draftModel && (
-              <div className="editor-submodal-backdrop" onClick={() => setEditorOpen(false)}>
-                <div className="editor-submodal" onClick={event => event.stopPropagation()}>
-                  <div className="editor-submodal-head">
-                    <div className="editor-submodal-title-row">
-                      <h4>{draftExists ? '编辑模型' : '添加模型'}</h4>
-                      <div className="config-protocol-badge">仅支持 OpenAI 兼容协议 API</div>
-                    </div>
-                    <button className="model-close" onClick={() => setEditorOpen(false)}>×</button>
-                  </div>
-
-                  <div className="editor-submodal-body">
-                    <div className="config-form screenshot-form">
-                      <label className="config-field full">
-                        <span>提供商</span>
-                        <select value={selectedProviderId} onChange={event => switchProvider(event.target.value)}>
-                          {PROVIDER_TEMPLATES.map(provider => (
-                            <option key={provider.id} value={provider.id}>{provider.name}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="config-field full">
-                        <span>接口地址</span>
-                        <input
-                          value={draftModel.baseUrl ?? ''}
-                          placeholder={selectedProvider.baseUrlPlaceholder ?? 'https://api.example.com/v1'}
-                          onChange={event => patchDraft({ baseUrl: event.target.value || undefined })}
-                        />
-                      </label>
-
-                      <label className="config-field full">
-                        <span>API Key</span>
-                        <div className="config-secret-row">
-                          <input
-                            value={draftModel.apiKey ?? ''}
-                            type={showApiKey ? 'text' : 'password'}
-                            placeholder={selectedProvider.apiKeyPlaceholder ?? '输入你的 API Key'}
-                            onChange={event => patchDraft({ apiKey: event.target.value || undefined })}
-                          />
-                          <button type="button" className="config-eye-btn" onClick={() => setShowApiKey(value => !value)}>
-                            <Ic.eye width={16} height={16} />
-                          </button>
-                        </div>
-                      </label>
-
-                      <label className="config-field full">
-                        <span>模型名称</span>
-                        <input
-                          value={draftModel.model}
-                          placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
-                          onChange={event => patchDraft({ model: event.target.value })}
-                        />
-                      </label>
-
-                      <div className="config-advanced-heading full">高级配置</div>
-
-                      <div className="screenshot-check-grid full">
-                        <label><input type="checkbox" checked={draftModel.supportsTools ?? true} onChange={event => patchDraft({ supportsTools: event.target.checked })} /> 工具调用</label>
-                        <label><input type="checkbox" checked={draftModel.supportsVision ?? false} onChange={event => patchDraft({ supportsVision: event.target.checked })} /> 图片输入</label>
-                        <label><input type="checkbox" checked={draftModel.reasoning} onChange={event => patchDraft({ reasoning: event.target.checked })} /> 推理模式</label>
-                        <label><input type="checkbox" checked={draftModel.customProtocol ?? false} onChange={event => patchDraft({ customProtocol: event.target.checked })} /> 自定义协议</label>
-                      </div>
-
-                      <label className="config-field">
-                        <span>输入</span>
-                        <input
-                          value={draftModel.inputWindow ?? ''}
-                          placeholder="使用提供商默认值"
-                          onChange={event => patchDraft({ inputWindow: event.target.value || undefined })}
-                        />
-                        <div className="window-presets">
-                          {MODEL_INPUT_PRESETS.map(preset => (
-                            <button key={preset} type="button" onClick={() => patchDraft({ inputWindow: preset })}>{preset}</button>
-                          ))}
-                        </div>
-                      </label>
-
-                      <label className="config-field">
-                        <span>输出</span>
-                        <input
-                          value={draftModel.outputWindow ?? ''}
-                          placeholder="使用提供商默认值"
-                          onChange={event => patchDraft({ outputWindow: event.target.value || undefined })}
-                        />
-                        <div className="window-presets">
-                          {MODEL_OUTPUT_PRESETS.map(preset => (
-                            <button key={preset} type="button" onClick={() => patchDraft({ outputWindow: preset })}>{preset}</button>
-                          ))}
-                        </div>
-                      </label>
-
-                      <div className="config-advanced-toggle full">
-                        <button type="button" onClick={() => setAdvancedOpen(value => !value)}>
-                          <span>更多高级项</span>
-                          <Ic.chevD width={14} height={14} className={advancedOpen ? 'open' : ''} />
-                        </button>
-                      </div>
-
-                      {advancedOpen && (
-                        <div className="config-advanced-panel full">
-                          <div className="config-advanced-grid">
-                            <label className="config-field">
-                              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <span>协议强制覆盖</span>
-                                <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>留空 = OpenAI 兼容协议（推荐）</span>
-                              </span>
-                              <select value={draftModel.api ?? ''} onChange={event => patchDraft({ api: (event.target.value || undefined) as AgentProviderApi | undefined })}>
-                                <option value="">自动（OpenAI 兼容）</option>
-                                <option value="openai-completions">openai-completions（Chat Completions）</option>
-                                <option value="openai-responses">openai-responses（Responses API，仅 OpenAI 官方新版）</option>
-                                <option value="anthropic-messages">anthropic-messages（Anthropic 原生接口）</option>
-                                <option value="google-generative-ai">google-generative-ai（Google 原生接口）</option>
-                              </select>
-                            </label>
-
-                            <label className="config-field">
-                              <span>默认模式</span>
-                              <select value={draftModel.defaultMode} onChange={event => patchDraft({ defaultMode: event.target.value as AgentMode })}>
-                                {AGENT_MODES.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                              </select>
-                            </label>
-
-                            <label className="config-field">
-                              <span>Provider ID</span>
-                              <input
-                                value={draftModel.providerId}
-                                disabled={selectedProvider.builtin === true}
-                                placeholder={selectedProvider.providerId ?? selectedProvider.id}
-                                onChange={event => patchDraft({ providerId: event.target.value })}
-                              />
-                            </label>
-
-                            <div className="config-switch-row">
-                              <label><input type="checkbox" checked={draftModel.enabled} onChange={event => patchDraft({ enabled: event.target.checked })} /> 启用模型</label>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {modelStatus && <div className="model-status inner">{modelStatus}</div>}
-
-                    <div className="model-actions inner">
-                      <button onClick={() => setEditorOpen(false)}>取消</button>
-                      <button className="primary" onClick={saveModelSettings}>保存</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 })

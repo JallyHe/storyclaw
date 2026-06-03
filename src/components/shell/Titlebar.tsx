@@ -25,7 +25,7 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
   const {
     view, setView, theme, setTheme,
     toggleLeft, toggleRight, leftOpen, rightOpen,
-    leftPanel, setLeftPanel
+    leftPanel, setLeftPanel, openSettings
   } = useUiStore()
   const { root, openWorkspace } = useWorkspaceStore()
   const activeFile = useTabsStore(s => s.activeFile)
@@ -33,6 +33,7 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
   const [isMaximized, setIsMaximized] = useState(false)
   const [appVersion, setAppVersion] = useState('0.0.0')
   const [updateStatus, setUpdateStatus] = useState<UpdateSnapshot | null>(null)
+  const [dismissedUpdateNotice, setDismissedUpdateNotice] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
   const platform = window.api?.app.platform ?? 'win32'
   const isMac = platform === 'darwin'
@@ -112,6 +113,7 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
   }
 
   const checkUpdates = () => {
+    setDismissedUpdateNotice('')
     void window.api?.updater.check().then(setUpdateStatus)
   }
 
@@ -119,7 +121,10 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
     void window.api?.updater.install()
   }
 
-  const showUpdateNotice = updateStatus && updateStatus.status !== 'idle'
+  const updateNoticeKey = updateStatus
+    ? `${updateStatus.status}:${updateStatus.latestVersion ?? ''}:${updateStatus.message ?? ''}:${updateStatus.progress ?? ''}`
+    : ''
+  const showUpdateNotice = Boolean(updateStatus && updateStatus.status !== 'idle' && updateNoticeKey !== dismissedUpdateNotice)
 
   const menus: MenuGroup[] = [
     {
@@ -131,6 +136,8 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
         { label: '保存当前文件', shortcut: 'Ctrl+S', disabled: true },
         { divider: true, label: 'divider-file' },
         { label: '导出剧本...', disabled: !isScreenplayFile, onSelect: exportStory },
+        { divider: true, label: 'divider-file-settings' },
+        { label: '设置...', shortcut: 'Ctrl+,', onSelect: () => openSettings() },
         { label: '关闭工作区', disabled: !root }
       ]
     },
@@ -293,6 +300,15 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
           {updateStatus.status === 'downloaded' && (
             <button type="button" onClick={installUpdates}>安装</button>
           )}
+          <button
+            type="button"
+            className="update-toast-close"
+            title="关闭"
+            aria-label="关闭更新提示"
+            onClick={() => setDismissedUpdateNotice(updateNoticeKey)}
+          >
+            <Ic.x width={13} height={13} />
+          </button>
         </div>
       )}
     </div>

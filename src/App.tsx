@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useUiStore, useTabsStore, useWorkspaceStore } from '@/store'
+import { useUiStore, useTabsStore, useWorkspaceStore, useImBotStore } from '@/store'
+import { imIpc } from '@/ipc/im'
 import { Titlebar } from '@/components/shell/Titlebar'
 import { ActivityBar } from '@/components/shell/ActivityBar'
 import { ResizeHandle } from '@/components/shell/ResizeHandle'
@@ -12,7 +13,9 @@ import { Breadcrumb } from '@/components/tabs/Breadcrumb'
 import { FileEditor } from '@/components/editors/FileEditor'
 import { Copilot } from '@/components/copilot/Copilot'
 import { AgentView } from '@/components/agent/AgentView'
+import { IMBotPanel } from '@/components/imbot/IMBotPanel'
 import { Wizard } from '@/components/wizard/Wizard'
+import { SettingsModal } from '@/components/settings/SettingsModal'
 import { useAgentPersistence } from '@/hooks/useAgentPersistence'
 
 export default function App() {
@@ -34,6 +37,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // 全局订阅机器人会话事件（即使面板未打开也持续收集）
+  useEffect(() => {
+    return imIpc.onMessage(event => useImBotStore.getState().push(event))
+  }, [])
 
   // show welcome screen when no workspace is open
   const showWelcome = !root
@@ -57,6 +65,9 @@ export default function App() {
                 )}
                 {leftPanel === 'scm' && (
                   <ScmPanel width={explorerWidth} />
+                )}
+                {leftPanel === 'imbot' && (
+                  <IMBotPanel width={explorerWidth} />
                 )}
                 <ResizeHandle
                   width={explorerWidth}
@@ -115,6 +126,8 @@ export default function App() {
       {showWizard && (
         <Wizard onClose={() => setShowWizard(false)} />
       )}
+
+      <SettingsModal />
     </div>
   )
 }

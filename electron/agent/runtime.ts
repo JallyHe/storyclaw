@@ -250,6 +250,64 @@ export class StoryClawAgentRuntime {
     await this.runtime.newSession()
   }
 
+  /**
+   * Headless 一次性提问：用于 IM 机器人等无渲染端的场景。
+   * 直接订阅 session 事件收集助手回复文本，到 agent_end 时结算返回。
+   * 默认用 ask 只读模式（不触发需 UI 审核的写入）。
+   */
+  async promptOnce(text: string, mode: AgentMode = 'ask', onDelta?: (full: string) => void): Promise<string> {
+    const session = this.requireSession()
+    this.applyMode(mode)
+    setAgentPermission('default')
+    const { cleanText, attachments } = await this.resolveFileMentions(text)
+    const projectConfig = await this.readProjectConfigBlock()
+    const context = [getModeConfig(mode).systemSuffix, projectConfig].filter(Boolean).join('\n\n')
+    const body = attachments
+      ? `${context}\n\n用户请求：${cleanText}\n\n${attachments}`
+      : `${context}\n\n用户请求：${cleanText}`
+
+    return await new Promise<string>((resolve, reject) => {
+      let collected = ''
+      let settled = false
+      const timer = setTimeout(() => finish(), 120000) // 兜底超时 2 分钟
+
+      const finish = (errText?: string) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        try { unsub?.() } catch { /* ignore */ }
+        if (errText) reject(new Error(errText))
+        else resolve(collected.trim())
+      }
+
+      const unsub: (() => void) | undefined = (session as any).subscribe((event: any) => {
+        switch (event.type) {
+          case 'message_update': {
+            const ae = event.assistantMessageEvent
+            if (ae?.type === 'text_delta' && typeof ae.delta === 'string') {
+              collected += ae.delta
+              if (onDelta) { try { onDelta(collected) } catch { /* ignore */ } }
+            }
+            break
+          }
+          case 'agent_end': {
+            if (event.willRetry) break
+            if (!collected.trim()) {
+              const errMsg: string | undefined = (session as any)?.state?.errorMessage
+              if (errMsg) collected = `⚠️ ${errMsg}`
+            }
+            finish()
+            break
+          }
+          default:
+            break
+        }
+      })
+
+      session.prompt(body).catch((err: any) => finish(err?.message ?? String(err)))
+    })
+  }
+
   async stop(): Promise<void> {
     if (!this.runtime) return
     await this.runtime.session.abort()
