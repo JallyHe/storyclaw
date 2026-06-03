@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Ic } from '@/components/icons'
+import { FindBar } from './FindBar'
+import type { FindHandlers } from './FindBar'
 
 export interface DocOutlineItem {
   key: string
@@ -16,6 +18,8 @@ interface Props {
   outlineItems?: DocOutlineItem[]
   statusLeft?: ReactNode
   children: ReactNode
+  findHandlers?: FindHandlers
+  openWithReplace?: boolean
 }
 
 const ZOOM_STEPS = [50, 67, 75, 90, 100, 110, 125, 150] as const
@@ -32,11 +36,12 @@ function writeOutlineOpen(v: boolean) {
   try { localStorage.setItem(LS_OUTLINE, String(v)) } catch {}
 }
 
-export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, children }: Props) {
+export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, children, findHandlers, openWithReplace }: Props) {
   // Persist open/closed state across file switches
   const [showOutline, setShowOutline] = useState(readOutlineOpen)
   const [zoom, setZoom] = useState(100)
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
+  const [showFind, setShowFind] = useState(false)
 
   const hasOutline = outlineItems !== undefined
 
@@ -122,7 +127,24 @@ export function DocumentEditorShell({ toolbar, outlineItems, statusLeft, childre
         )}
 
         {/* Canvas / scroll area */}
-        <div className="doc-shell-canvas">
+        <div
+          className="doc-shell-canvas"
+          style={{ position: 'relative' }}
+          onKeyDown={findHandlers ? (e: React.KeyboardEvent) => {
+            const ctrl = e.ctrlKey || e.metaKey
+            if (ctrl && e.key === 'f') { e.preventDefault(); setShowFind(true) }
+            if (ctrl && e.key === 'h') { e.preventDefault(); setShowFind(true) }
+          } : undefined}
+          tabIndex={findHandlers ? -1 : undefined}
+        >
+          {findHandlers && showFind && (
+            <FindBar
+              handlers={findHandlers}
+              allowReplace={!!findHandlers.replace}
+              onClose={() => { findHandlers.clear(); setShowFind(false) }}
+              openWithReplace={openWithReplace}
+            />
+          )}
           <div
             className="doc-shell-canvas-inner"
             style={{ '--doc-zoom': zoom / 100 } as React.CSSProperties}
