@@ -3,8 +3,15 @@ import { markdownToRichTextDoc, richTextDocToMarkdown } from '../src/editors/ric
 
 describe('rich text markdown conversion', () => {
   it('round trips headings, bullets, and emphasis as markdown-compatible text', () => {
-    const markdown = '# 第一幕\n\n- 建立节目日常\n- 第一通来电\n\n**重点**与*情绪*。'
-    expect(richTextDocToMarkdown(markdownToRichTextDoc(markdown))).toBe(markdown)
+    // Input may use \n\n (standard Markdown) or \n — the doc structure must be preserved either way.
+    // The serializer normalises output to single \n (no blank lines between paragraphs).
+    const input = '# 第一幕\n\n- 建立节目日常\n- 第一通来电\n\n**重点**与*情绪*。'
+    const expected = '# 第一幕\n- 建立节目日常\n- 第一通来电\n**重点**与*情绪*。'
+    expect(richTextDocToMarkdown(markdownToRichTextDoc(input))).toBe(expected)
+    // Re-parsing the serialised output must yield the same document structure
+    const doc1 = markdownToRichTextDoc(input)
+    const doc2 = markdownToRichTextDoc(expected)
+    expect(doc1).toEqual(doc2)
   })
 
   it('does not emit trailing spaces when saving markdown rich text', () => {

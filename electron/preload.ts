@@ -8,6 +8,7 @@ import type {
   AgentConnectionTestResult,
   AgentModelOption,
   AgentResources,
+  ImportedSkill,
   VersionDiff,
   VersionRecord,
   VersionSnapshot,
@@ -101,6 +102,10 @@ const api = {
       ipcRenderer.invoke('agent:listModels'),
     listResources: (): Promise<AgentResources> =>
       ipcRenderer.invoke('agent:listResources'),
+    importSkillDialog: (workspaceRoot: string, sourceType?: 'file' | 'folder'): Promise<ImportedSkill | null> =>
+      ipcRenderer.invoke('agent:importSkillDialog', workspaceRoot, sourceType),
+    importSkillPackage: (workspaceRoot: string, sourcePath: string): Promise<ImportedSkill> =>
+      ipcRenderer.invoke('agent:importSkillPackage', workspaceRoot, sourcePath),
     setModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('agent:setModel', modelId),
     testModel: (modelId?: string): Promise<AgentConnectionTestResult> =>

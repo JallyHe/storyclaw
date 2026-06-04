@@ -109,6 +109,11 @@ export function getSkillsDir(): string {
   return path.join(resourceBaseDir(), 'skills')
 }
 
+/** 当前项目的默认外部 Skill 目录。 */
+export function getWorkspaceSkillsDir(workspaceRoot: string): string {
+  return path.join(workspaceRoot, '.storyclaw', 'skills')
+}
+
 /** 阶段专家定义目录。 */
 function getAgentsDir(): string {
   return path.join(resourceBaseDir(), 'agents')
@@ -151,22 +156,36 @@ async function readResource(file: string, fallbackName: string): Promise<AgentRe
   }
 }
 
-/** 列出内置的专家与创作技能，供 UI 选择器展示。 */
-export async function listAgentResources(): Promise<AgentResources> {
-  const agents = await Promise.all(
-    AGENT_NAMES.map(name => readResource(path.join(getAgentsDir(), `${name}.md`), name))
-  )
-  const skillsDir = getSkillsDir()
+async function readSkillResourcesFromDir(skillsDir: string): Promise<AgentResource[]> {
   let skillNames: string[] = []
   try {
     skillNames = (await fs.readdir(skillsDir, { withFileTypes: true }))
       .filter(d => d.isDirectory())
       .map(d => d.name)
       .sort()
-  } catch { /* 目录缺失时返回空 */ }
-  const skills = await Promise.all(
+  } catch {
+    return []
+  }
+  return Promise.all(
     skillNames.map(name => readResource(path.join(skillsDir, name, 'SKILL.md'), name))
   )
+}
+
+/** 列出内置与项目外部的专家/创作技能，供 UI 选择器展示。 */
+export async function listAgentResources(workspaceRoot?: string | null): Promise<AgentResources> {
+  const agents = await Promise.all(
+    AGENT_NAMES.map(name => readResource(path.join(getAgentsDir(), `${name}.md`), name))
+  )
+  const skillsByName = new Map<string, AgentResource>()
+  for (const skill of await readSkillResourcesFromDir(getSkillsDir())) {
+    skillsByName.set(skill.name, skill)
+  }
+  if (workspaceRoot) {
+    for (const skill of await readSkillResourcesFromDir(getWorkspaceSkillsDir(workspaceRoot))) {
+      skillsByName.set(skill.name, skill)
+    }
+  }
+  const skills = [...skillsByName.values()].sort((a, b) => a.name.localeCompare(b.name))
   return { agents, skills }
 }
 

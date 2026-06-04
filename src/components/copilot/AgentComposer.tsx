@@ -226,6 +226,11 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const [trigger, setTrigger] = useState<{ kind: 'slash' | 'mention'; query: string } | null>(null)
   const [triggerIndex, setTriggerIndex] = useState(0)
   const [mPath, setMPath] = useState<string[]>([])
+  const [showSkillImport, setShowSkillImport] = useState(false)
+  const [skillImporting, setSkillImporting] = useState(false)
+  const [skillImportDrag, setSkillImportDrag] = useState(false)
+  const [skillImportAuto, setSkillImportAuto] = useState(false)
+  const [skillImportMessage, setSkillImportMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   const [uploading, setUploading] = useState(false)
 
@@ -323,9 +328,13 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     reloadModels()
   }, [reloadModels])
 
-  useEffect(() => {
+  const reloadResources = useCallback(() => {
     void agentIpc.listResources().then(setResources).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    reloadResources()
+  }, [reloadResources])
 
   useEffect(() => {
     setTriggerIndex(0)
@@ -572,6 +581,56 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
       setUploading(false)
     }
   }, [root, uploading])
+
+  const importSkillFromPath = useCallback(async (sourcePath: string) => {
+    if (!root || skillImporting) return
+    setSkillImporting(true)
+    setSkillImportMessage(null)
+    try {
+      const imported = await agentIpc.importSkillPackage(root, sourcePath)
+      setSkillImportMessage({ type: 'ok', text: `已导入技能：${imported.title || imported.name}` })
+      reloadResources()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setSkillImportMessage({ type: 'err', text: message || '导入技能失败' })
+    } finally {
+      setSkillImporting(false)
+      setSkillImportDrag(false)
+    }
+  }, [reloadResources, root, skillImporting])
+
+  const chooseSkillPackage = useCallback(async (sourceType: 'file' | 'folder' = 'file') => {
+    if (!root || skillImporting) return
+    setSkillImporting(true)
+    setSkillImportMessage(null)
+    try {
+      const imported = await agentIpc.importSkillDialog(root, sourceType)
+      if (imported) {
+        setSkillImportMessage({ type: 'ok', text: `已导入技能：${imported.title || imported.name}` })
+        reloadResources()
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setSkillImportMessage({ type: 'err', text: message || '导入技能失败' })
+    } finally {
+      setSkillImporting(false)
+      setSkillImportDrag(false)
+    }
+  }, [reloadResources, root, skillImporting])
+
+  function handleSkillDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    setSkillImportDrag(false)
+    const file = event.dataTransfer.files[0]
+    if (!file) return
+    const sourcePath = workspaceIpc.getPathForFile(file)
+    if (!sourcePath) {
+      setSkillImportMessage({ type: 'err', text: '无法读取拖拽文件路径' })
+      return
+    }
+    void importSkillFromPath(sourcePath)
+  }
 
   function insertVoiceText(text: string) {
     const editor = edRef.current
@@ -912,8 +971,8 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
             ))}
             {filteredSkills.length === 0 && <div className="atp-empty">未加载到技能或专家</div>}
           </div>
-          <div className="ac-skill-import" onClick={() => setPop(null)}>
-            <Ic.download width={14} height={14} /> 共 {pickEntries.length} 项内置专家与技能
+          <div className="ac-skill-import" onClick={() => { setPop(null); setShowSkillImport(true); setSkillImportMessage(null) }}>
+            <Ic.download width={14} height={14} /> 导入技能
           </div>
         </Dropdown>
 
@@ -1034,6 +1093,51 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
       </div>
 
       {(pop || trigger) && <div className="ac-backdrop" onClick={() => { setPop(null); setTrigger(null); setTriggerIndex(0); setMPath([]) }} />}
+
+      {showSkillImport && (
+        <div className="skill-upload-backdrop" onMouseDown={() => setShowSkillImport(false)}>
+          <div className="skill-upload-modal" onMouseDown={event => event.stopPropagation()}>
+            <div className="skill-upload-head">
+              <h3>上传技能</h3>
+              <button className="skill-upload-close" onClick={() => setShowSkillImport(false)} title="关闭">
+                <Ic.x width={18} height={18} />
+              </button>
+            </div>
+            <div
+              className={`skill-upload-drop${skillImportDrag ? ' drag' : ''}${skillImporting ? ' busy' : ''}`}
+              onClick={() => void chooseSkillPackage('file')}
+              onDragOver={event => { event.preventDefault(); setSkillImportDrag(true) }}
+              onDragLeave={() => setSkillImportDrag(false)}
+              onDrop={handleSkillDrop}
+            >
+              {skillImporting ? <span className="ac-upload-spin" /> : <Ic.folderPlus width={42} height={42} />}
+              <div>拖拽文件或点击上传</div>
+            </div>
+            <div className="skill-upload-actions">
+              <button onClick={() => void chooseSkillPackage('folder')} disabled={skillImporting}>选择文件夹</button>
+              <button onClick={() => void chooseSkillPackage('file')} disabled={skillImporting}>选择 .zip</button>
+            </div>
+            <label className="skill-upload-check">
+              <input
+                type="checkbox"
+                checked={skillImportAuto}
+                onChange={event => setSkillImportAuto(event.target.checked)}
+              />
+              <span>非高风险自动安装</span>
+            </label>
+            {skillImportMessage && (
+              <div className={`skill-upload-message ${skillImportMessage.type}`}>{skillImportMessage.text}</div>
+            )}
+            <div className="skill-upload-req">
+              <div className="skill-upload-req-title">文件要求</div>
+              <ul>
+                <li>文件夹或者 .zip 需要包含 SKILL.md 文件</li>
+                <li>.md 文件需包含 YAML 格式的技能名称和描述</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

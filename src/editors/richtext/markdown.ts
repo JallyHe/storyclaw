@@ -1,7 +1,8 @@
 import { richTextSchema, type RichTextDocJSON } from './schema'
 
 export function markdownToRichTextDoc(markdown: string): RichTextDocJSON {
-  const normalized = normalizeMarkdownTableSpacing(markdown)
+  // Normalize Windows line endings so \r never ends up inside paragraph text
+  const normalized = normalizeMarkdownTableSpacing(markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n'))
   const blocks = normalized.split(/\n{2,}/).flatMap(chunkToNodes)
   return {
     type: 'doc',
@@ -10,17 +11,9 @@ export function markdownToRichTextDoc(markdown: string): RichTextDocJSON {
 }
 
 export function richTextDocToMarkdown(doc: RichTextDocJSON): string {
-  const lines: string[] = []
-  for (const node of doc.content ?? []) {
-    const markdown = nodeToMarkdown(node)
-    const previous = doc.content?.[lines.length - 1]
-    if (lines.length === 0 || node.type === 'bullet_item' && previous?.type === 'bullet_item') {
-      lines.push(markdown)
-    } else {
-      lines.push('\n' + markdown)
-    }
-  }
-  return lines.join('\n')
+  return (doc.content ?? [])
+    .map(node => nodeToMarkdown(node))
+    .join('\n')
 }
 
 // ── Chunk dispatch ───────────────────────────────────────────────────────────

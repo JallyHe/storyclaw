@@ -8,6 +8,7 @@ import type {
   AgentConnectionTestResult,
   AgentModelOption,
   AgentResources,
+  ImportedSkill,
   VersionDiff,
   VersionRecord,
   VersionSnapshot,
@@ -67,6 +68,8 @@ interface Window {
         saveConfig(config: AgentConfigSnapshot): Promise<AgentConfigSnapshot>
         listModels(): Promise<AgentModelOption[]>
         listResources(): Promise<AgentResources>
+        importSkillDialog(workspaceRoot: string, sourceType?: 'file' | 'folder'): Promise<ImportedSkill | null>
+        importSkillPackage(workspaceRoot: string, sourcePath: string): Promise<ImportedSkill>
         setModel(modelId: string): Promise<void>
         testModel(modelId?: string): Promise<AgentConnectionTestResult>
         loadSnapshot(workspaceRoot: string): Promise<AgentSnapshot>

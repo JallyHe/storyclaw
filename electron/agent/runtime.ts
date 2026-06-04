@@ -17,7 +17,7 @@ import { ALL_TOOLS, initTools, setAgentToolMode, setAgentPermission } from './to
 import { setupStreaming } from './streaming'
 import { getModeConfig, STORYCLAW_TOOL_NAMES } from './policy'
 import { loadAgentConfig, prepareAgentModelRuntime, saveAgentConfig } from './config'
-import { initSubagentRuntime, spawnSubagent, getSkillsDir } from './skills'
+import { initSubagentRuntime, spawnSubagent, getSkillsDir, getWorkspaceSkillsDir } from './skills'
 import { readTextFile } from '../fs/workspace'
 
 const BASE_SYSTEM_PROMPT = `你是 StoryClaw 的 AI 剧本创作助手。
@@ -113,8 +113,8 @@ export class StoryClawAgentRuntime {
         modelRegistry: modelRuntime.modelRegistry,
         settingsManager,
         resourceLoaderOptions: {
-          // 加载随应用分发的全套剧本创作 Skill，自动注入系统提示词供模型按需调用。
-          additionalSkillPaths: [getSkillsDir()],
+          // 加载随应用分发的创作 Skill，以及当前项目 .storyclaw/skills 下的外部 Skill。
+          additionalSkillPaths: [getSkillsDir(), getWorkspaceSkillsDir(cwd)],
           systemPromptOverride: () => BASE_SYSTEM_PROMPT
         }
       })

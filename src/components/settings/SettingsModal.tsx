@@ -4,9 +4,11 @@ import { Ic } from '@/components/icons'
 import { ModelSettingsPanel } from './ModelSettingsPanel'
 import { EditorSettingsPanel } from './EditorSettingsPanel'
 import { IntegrationsPanel } from './IntegrationsPanel'
+import { AccountSettingsPanel } from './AccountSettingsPanel'
 import './settings.css'
 
 const NAV: Array<{ id: SettingsTab; label: string; icon: keyof typeof Ic }> = [
+  { id: 'account', label: '账户管理', icon: 'user' },
   { id: 'model', label: '模型', icon: 'cube' },
   { id: 'editor', label: '编辑器', icon: 'edit' },
   { id: 'integrations', label: '接入平台', icon: 'robot' }
@@ -47,6 +49,7 @@ export function SettingsModal() {
           <button className="set-close" title="关闭" onClick={closeSettings}>
             <Ic.x width={16} height={16} />
           </button>
+          {settingsTab === 'account' && <AccountSettingsPanel />}
           {settingsTab === 'model' && <ModelSettingsPanel />}
           {settingsTab === 'editor' && <EditorSettingsPanel />}
           {settingsTab === 'integrations' && <IntegrationsPanel />}

@@ -169,6 +169,13 @@ export interface AgentResources {
   skills: AgentResource[]
 }
 
+export interface ImportedSkill {
+  name: string
+  title: string
+  description: string
+  targetDir: string
+}
+
 // ─── UI state ─────────────────────────────────────────────────────────────────
 
 export type AppView = 'editor' | 'agent'

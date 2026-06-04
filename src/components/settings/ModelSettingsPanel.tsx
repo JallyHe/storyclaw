@@ -8,7 +8,6 @@ import {
   createDraftModel,
   getProviderGroupId
 } from './modelCatalog'
-import { ServerConnectionPanel } from './ServerConnectionPanel'
 
 export function ModelSettingsPanel() {
   const [config, setConfig] = useState<AgentConfigSnapshot | null>(null)
@@ -104,7 +103,7 @@ export function ModelSettingsPanel() {
 
   return (
     <div className="set-section">
-      <div className="set-section-head">
+      <div className="set-section-head set-model-head">
         <div>
           <h3>模型</h3>
           <p className="set-section-desc">配置 Agent 使用的模型与 API Key，可添加多个并切换。</p>
@@ -155,7 +154,24 @@ export function ModelSettingsPanel() {
 
       {/* 编辑/新增表单 */}
       {draft && (
-        <div className="set-model-editor">
+        <div className="set-model-dialog-backdrop" onMouseDown={() => setDraft(null)}>
+          <div
+            className="set-model-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="model-dialog-title"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="set-model-dialog-head">
+              <div>
+                <h3 id="model-dialog-title">{models.some(m => m.id === draft.id) ? '编辑模型' : '添加模型'}</h3>
+                <p className="set-section-desc">配置供应商、模型 ID 和访问密钥。</p>
+              </div>
+              <button className="set-icon-btn" title="关闭" onClick={() => setDraft(null)}>
+                <Ic.x width={16} height={16} />
+              </button>
+            </div>
+            <div className="set-model-editor">
           <div className="set-field">
             <label>供应商</label>
             <div className="set-provider-grid">
@@ -236,11 +252,12 @@ export function ModelSettingsPanel() {
             <button className="set-btn" onClick={() => setDraft(null)}>取消</button>
             <button className="set-btn primary" onClick={() => saveDraft()}>保存</button>
           </div>
+            </div>
+          </div>
         </div>
       )}
 
       {!draft && status && <div className="set-status">{status}</div>}
-      <ServerConnectionPanel />
     </div>
   )
 }

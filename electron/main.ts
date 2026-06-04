@@ -29,6 +29,7 @@ import type { NewProjectOptions, SearchOptions } from '../src/types'
 import { getWorkspaceRoot, setAgentModel, startAgentSession, sendPrompt, stopAgent } from './agent/session'
 import { loadAgentSnapshot, saveAgentSnapshot } from './agent/persistence'
 import { listAgentResources } from './agent/skills'
+import { installSkillPackage } from './agent/skillImport'
 import {
   listConfiguredAgentModels,
   loadAgentConfig,
@@ -36,7 +37,6 @@ import {
   testAgentModel
 } from './agent/config'
 import {
-  connectToServer,
   disconnectFromServer,
   loadConnectionState
 } from './agent/serverConnection'
@@ -456,7 +456,35 @@ ipcMain.handle('agent:listModels', async () => {
 })
 
 ipcMain.handle('agent:listResources', async () => {
-  return listAgentResources()
+  return listAgentResources(getWorkspaceRoot())
+})
+
+ipcMain.handle('agent:importSkillDialog', async (_e, workspaceRoot: string, sourceType: 'file' | 'folder' = 'file') => {
+  if (!win) return null
+  const result = await dialog.showOpenDialog(win, {
+    title: '上传技能',
+    properties: sourceType === 'folder' ? ['openDirectory'] : ['openFile'],
+    filters: [
+      { name: '技能包', extensions: ['zip'] },
+      { name: '所有文件', extensions: ['*'] }
+    ]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  const imported = await installSkillPackage(workspaceRoot, result.filePaths[0])
+  startAgentSession(workspaceRoot, win).catch(err => {
+    console.error('[Agent] Failed to restart session after skill import:', err.message)
+  })
+  return imported
+})
+
+ipcMain.handle('agent:importSkillPackage', async (_e, workspaceRoot: string, sourcePath: string) => {
+  const imported = await installSkillPackage(workspaceRoot, sourcePath)
+  if (win) {
+    startAgentSession(workspaceRoot, win).catch(err => {
+      console.error('[Agent] Failed to restart session after skill import:', err.message)
+    })
+  }
+  return imported
 })
 
 ipcMain.handle('agent:setModel', async (_e, modelId: string) => {
