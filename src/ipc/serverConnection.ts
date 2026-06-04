@@ -17,9 +17,10 @@ export interface ConnectionState {
 }
 
 export const serverConnectionIpc = {
-  connect: (serverUrl: string, email: string, password: string): Promise<ConnectResult> =>
-    getOptionalApi()?.serverConnection.connect(serverUrl, email, password)
-    ?? Promise.reject(new Error('API not available')),
+  /** Open the sub2api browser login page; server redirects back via storyclaw://auth */
+  openAuthBrowser: (serverUrl: string): Promise<void> =>
+    getOptionalApi()?.serverConnection.openAuthBrowser(serverUrl)
+    ?? Promise.resolve(),
 
   disconnect: (): Promise<void> =>
     getOptionalApi()?.serverConnection.disconnect()
@@ -28,4 +29,8 @@ export const serverConnectionIpc = {
   getState: (): Promise<ConnectionState | null> =>
     getOptionalApi()?.serverConnection.getState()
     ?? Promise.resolve(null),
+
+  /** Subscribe to the deep-link connected event from main process */
+  onConnected: (cb: () => void): (() => void) =>
+    getOptionalApi()?.serverConnection.onConnected(cb) ?? (() => {}),
 }

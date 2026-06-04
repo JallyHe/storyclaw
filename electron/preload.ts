@@ -165,14 +165,19 @@ const api = {
     saveConversations: (sessions: unknown[]): Promise<void> => ipcRenderer.invoke('im:saveConversations', sessions)
   },
   serverConnection: {
-    connect: (serverUrl: string, email: string, password: string): Promise<{
-      success: boolean; modelCount?: number; balance?: number; error?: string
-    }> => ipcRenderer.invoke('serverConnection:connect', serverUrl, email, password),
+    /** Open the sub2api browser login page; server will redirect back via storyclaw:// */
+    openAuthBrowser: (serverUrl: string): Promise<void> =>
+      ipcRenderer.invoke('serverConnection:openAuthBrowser', serverUrl),
     disconnect: (): Promise<void> => ipcRenderer.invoke('serverConnection:disconnect'),
     getState: (): Promise<{
       serverUrl: string; email: string; token: string; modelCount: number
       balance: number; expiresAt: number | null
     } | null> => ipcRenderer.invoke('serverConnection:getState'),
+    /** Called by main process when storyclaw://auth callback is received */
+    onConnected: (cb: () => void) => {
+      ipcRenderer.on('serverConnection:connected', cb)
+      return () => ipcRenderer.removeAllListeners('serverConnection:connected')
+    },
   }
 }
 

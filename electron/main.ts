@@ -477,8 +477,13 @@ ipcMain.handle('agent:saveSnapshot', async (_e, workspaceRoot: string, snapshot)
 
 // ─── Server Connection IPC ────────────────────────────────────────────────────
 
-ipcMain.handle('serverConnection:connect', async (_e, serverUrl: string, email: string, password: string) => {
-  return connectToServer(serverUrl, email, password)
+// openAuthBrowser: opens the sub2api browser-based login page.
+// StoryClaw passes its custom scheme so the server can redirect back.
+ipcMain.handle('serverConnection:openAuthBrowser', async (_e, serverUrl: string) => {
+  const base = serverUrl.replace(/\/$/, '')
+  const callback = 'storyclaw://auth'
+  const url = `${base}/client-auth?callback=${encodeURIComponent(callback)}&server=${encodeURIComponent(base)}`
+  await import('electron').then(({ shell }) => shell.openExternal(url))
 })
 
 ipcMain.handle('serverConnection:disconnect', async () => {
@@ -596,6 +601,48 @@ ipcMain.handle('im:saveConversations', (_e, sessions: unknown[]) => {
 })
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
+
+// Register storyclaw:// protocol for desktop client OAuth callbacks.
+// On macOS: open-url event fires. On Windows/Linux: second-instance with argv.
+const PROTOCOL = 'storyclaw'
+if (!app.isDefaultProtocolClient(PROTOCOL)) {
+  app.setAsDefaultProtocolClient(PROTOCOL)
+}
+
+/** Handle a storyclaw://auth?token=...&server=... deep link */
+async function handleDeepLink(url: string) {
+  try {
+    const u = new URL(url)
+    if (u.host !== 'auth') return
+    const token = u.searchParams.get('token')
+    const serverUrl = u.searchParams.get('server')
+    if (!token || !serverUrl) return
+
+    // Persist connection state and load models
+    const { connectWithToken } = await import('./agent/serverConnection')
+    await connectWithToken(serverUrl, token)
+
+    // Notify renderer that connection is ready
+    if (win) {
+      win.webContents.send('serverConnection:connected')
+      showWindow(win)
+    }
+  } catch (e) {
+    console.warn('[DeepLink] Failed to handle storyclaw:// URL:', e)
+  }
+}
+
+// macOS: app receives open-url event
+app.on('open-url', (_event, url) => {
+  void handleDeepLink(url)
+})
+
+// Windows/Linux: second-instance passes args; first arg after '--' may be the URL
+app.on('second-instance', (_event, argv) => {
+  const deepLink = argv.find(a => a.startsWith(`${PROTOCOL}://`))
+  if (deepLink) void handleDeepLink(deepLink)
+  if (win) showWindow(win)
+})
 
 app.whenReady().then(() => {
   createWindow().catch(err => console.error('[App] Failed to create window:', err))

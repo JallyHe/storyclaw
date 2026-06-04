@@ -134,6 +134,42 @@ export async function connectToServer(
 }
 
 /**
+ * connectWithToken: called after browser OAuth callback with a pre-issued token.
+ * Saves state and loads models without re-authenticating.
+ */
+export async function connectWithToken(serverUrl: string, token: string): Promise<ConnectResult> {
+  const base = serverUrl.replace(/\/$/, '')
+
+  // Load models with the token
+  let modelsData: ClientModelsResponse
+  try {
+    const res = await fetch(`${base}/api/client/models`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      return { success: false, error: `获取模型列表失败 (${res.status})` }
+    }
+    modelsData = await res.json() as ClientModelsResponse
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { success: false, error: `获取模型列表失败: ${msg}` }
+  }
+
+  const modelCount = await mergeModels(modelsData)
+  const state: ServerConnectionState = {
+    serverUrl: base,
+    email: '',          // not known from token-only flow; can be fetched later
+    token,
+    tokenSavedAt: Date.now(),
+    modelCount,
+    balance: modelsData.credits?.balance ?? 0,
+    expiresAt: modelsData.credits?.expires_at ?? null,
+  }
+  await saveConnectionState(state)
+  return { success: true, modelCount, balance: state.balance }
+}
+
+/**
  * Remove all sub2api models from the config and disconnect.
  */
 export async function disconnectFromServer(): Promise<void> {
