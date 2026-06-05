@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useUiStore, useWorkspaceStore } from '@/store'
+import { requestUnsavedDocumentAction, useUiStore, useWorkspaceStore } from '@/store'
 import { useTabsStore } from '@/store'
 import { workspaceIpc } from '@/ipc/workspace'
 import { Ic } from '@/components/icons'
@@ -27,7 +27,7 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
     toggleLeft, toggleRight, leftOpen, rightOpen,
     leftPanel, setLeftPanel, openSettings
   } = useUiStore()
-  const { root, openWorkspace } = useWorkspaceStore()
+  const { root, openWorkspace, closeWorkspace } = useWorkspaceStore()
   const activeFile = useTabsStore(s => s.activeFile)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
@@ -51,6 +51,13 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
   const exportStory = () => {
     if (!activeFile || !isScreenplayFile) return
     void workspaceIpc.exportStory(activeFile)
+  }
+
+  const handleCloseWorkspace = async () => {
+    const tabs = useTabsStore.getState().openTabs
+    if (!(await requestUnsavedDocumentAction(tabs))) return
+    await closeWorkspace()
+    setView('editor')
   }
 
   useEffect(() => {
@@ -138,7 +145,7 @@ export function Titlebar({ onNewProject }: { onNewProject?: () => void }) {
         { label: '导出剧本...', disabled: !isScreenplayFile, onSelect: exportStory },
         { divider: true, label: 'divider-file-settings' },
         { label: '设置...', shortcut: 'Ctrl+,', onSelect: () => openSettings() },
-        { label: '关闭工作区', disabled: !root }
+        { label: '关闭工作区', disabled: !root, onSelect: () => { void handleCloseWorkspace() } }
       ]
     },
     {

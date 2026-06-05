@@ -22,7 +22,6 @@ function statusLabel(status: VersionWorkingFile['status']) {
     case 'added': return '新增'
     case 'deleted': return '删除'
     case 'renamed': return '重命名'
-    case 'untracked': return '未跟踪'
     default: return '修改'
   }
 }
@@ -32,13 +31,18 @@ function statusShort(status: VersionWorkingFile['status']) {
     case 'added': return 'A'
     case 'deleted': return 'D'
     case 'renamed': return 'R'
-    case 'untracked': return 'U'
     default: return 'M'
   }
 }
 
 function basename(filePath: string) {
   return filePath.split(/[\\/]/).pop() ?? filePath
+}
+
+function blockPreview(block: DiffBlock['blk']): string {
+  if (block.type === 'character') return block.name + (block.ext ? `（${block.ext}）` : '')
+  if (block.type === 'scene') return [`第 ${block.number} 场`, block.location, block.intext, block.time].filter(Boolean).join(' ') || '场景'
+  return block.text || block.type
 }
 
 function relativeToRoot(root: string, filePath: string) {
@@ -51,7 +55,7 @@ function relativeToRoot(root: string, filePath: string) {
 function ScmFileCard({ fileId, diffBlocks, onOpen, onAccept, onReject }: {
   fileId: string
   diffBlocks: DiffBlock[]
-  onOpen: (id: string) => void
+  onOpen: (id: string, block?: DiffBlock['blk']) => void
   onAccept: (id: string) => void
   onReject: (id: string) => void
 }) {
@@ -60,6 +64,7 @@ function ScmFileCard({ fileId, diffBlocks, onOpen, onAccept, onReject }: {
   const kind = FILE_KIND[ext] ?? { icon: Ic.diffFile, color: 'var(--accent)' }
   const added = diffBlocks.filter(b => b.diff === 'add').length
   const removed = diffBlocks.filter(b => b.diff === 'del').length
+  const firstChangedBlock = diffBlocks.find(block => block.diff)?.blk
 
   return (
     <div className="scm-file-card compact">
@@ -67,13 +72,27 @@ function ScmFileCard({ fileId, diffBlocks, onOpen, onAccept, onReject }: {
         <span className="file-ico" style={{ color: kind.color }}>
           <kind.icon width={14} height={14} />
         </span>
-        <button type="button" className="scm-file-name" onClick={() => onOpen(fileId)}>
+        <button type="button" className="scm-file-name" onClick={() => onOpen(fileId, firstChangedBlock)}>
           {name}<span className="file-ext">.{ext}</span>
         </button>
         <span className="scm-stat">
           {added > 0 && <span style={{ color: 'var(--diff-add-fg)' }}>+{added}</span>}
           {removed > 0 && <span style={{ color: 'var(--diff-del-fg)' }}>-{removed}</span>}
         </span>
+      </div>
+      <div className="scm-diff-mini">
+        {diffBlocks.filter(block => block.diff).slice(0, 3).map((block, index) => (
+          <button
+            key={`${block.blk.id}-${index}`}
+            type="button"
+            className={block.diff === 'add' ? 'add' : 'del'}
+            onClick={() => onOpen(fileId, block.blk)}
+            title="打开并跳到这处改动"
+          >
+            <span>{block.diff === 'add' ? '+' : '-'}</span>
+            {blockPreview(block.blk)}
+          </button>
+        ))}
       </div>
       <div className="scm-actions">
         <button type="button" className="mini-btn" onClick={() => onReject(fileId)}>拒绝</button>
@@ -287,22 +306,32 @@ export function ScmPanel({ width }: Props) {
     }
   }
 
+  const openPendingChange = (fileId: string, block?: DiffBlock['blk']) => {
+    openTab(fileId, {
+      line: 1,
+      column: 0,
+      length: Math.max(1, block ? blockPreview(block).length : 1),
+      matchText: block ? blockPreview(block) : '',
+      blockId: block?.id
+    })
+  }
+
   return (
     <div className="scm-panel version-panel" style={{ width, flexShrink: 0 }}>
       <div className="scm-head">
         <span className="scm-title">版本管理</span>
         {root && (
           <div className="version-head-actions">
-            <button type="button" className="mini-btn primary" onClick={() => setCreateOpen(true)} disabled={saving}>
-              创建版本
+            <button type="button" className="mini-btn primary" aria-label="创建版本" onClick={() => setCreateOpen(true)} disabled={saving}>
+              创建
             </button>
-            <button type="button" className="mini-btn" onClick={() => setRestoreOpen(true)} disabled={saving}>
-              恢复版本
+            <button type="button" className="mini-btn" aria-label="恢复版本" onClick={() => setRestoreOpen(true)} disabled={saving}>
+              恢复
             </button>
           </div>
         )}
-        <button type="button" className="mini-btn" onClick={() => void load()} disabled={saving}>
-          <Ic.refresh width={12} height={12} /> 刷新
+        <button type="button" className="mini-btn version-refresh-btn" title="刷新版本状态" onClick={() => void load()} disabled={saving}>
+          <Ic.refresh width={12} height={12} />
         </button>
       </div>
 
@@ -351,7 +380,7 @@ export function ScmPanel({ width }: Props) {
                   key={fileId}
                   fileId={fileId}
                   diffBlocks={change.diffBlocks}
-                  onOpen={openTab}
+                  onOpen={openPendingChange}
                   onAccept={acceptChange}
                   onReject={rejectChange}
                 />

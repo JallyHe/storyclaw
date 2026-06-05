@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildScreenplayPaginationPlan } from '../src/editors/screenplay/plugins'
+import { buildScreenplayPaginationPlan, normalizePaginationMeasurement } from '../src/editors/screenplay/plugins'
 
 describe('screenplay pagination plan', () => {
   it('inserts a spacer before a block that would enter the page bottom margin', () => {
@@ -39,5 +39,11 @@ describe('screenplay pagination plan', () => {
 
     expect(plan).toHaveLength(1)
     expect(plan[0].pos).toBe(10)
+  })
+
+  it('normalizes zoomed DOM measurements back to page coordinates', () => {
+    expect(normalizePaginationMeasurement(900, 0.9)).toBe(1000)
+    expect(normalizePaginationMeasurement(125, 1.25)).toBe(100)
+    expect(normalizePaginationMeasurement(240, 0)).toBe(240)
   })
 })

@@ -5,7 +5,7 @@ import type { DiffBlock, EpFile } from '@/types'
 import { DocumentEditorShell, type DocOutlineItem } from '@/components/editors/DocumentEditorShell'
 import { Ic } from '@/components/icons'
 import { epFileToScreenplayDoc, screenplayDocToEpFile } from '@/editors/screenplay/convert'
-import { createScreenplayPlugins, setCurrentLineType } from '@/editors/screenplay/plugins'
+import { createReadonlyScreenplayPlugins, createScreenplayPlugins, setCurrentLineType } from '@/editors/screenplay/plugins'
 import { SCREENPLAY_LINE_ORDER } from '@/editors/screenplay/controls'
 import { addEpisodeToFile } from '@/editors/screenplay/episodeCollection'
 import { episodeLabel } from '@/editors/screenplay/episodeMeta'
@@ -139,7 +139,9 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
   useEffect(() => {
     if (!revealTarget || revealTarget.path !== filePath) return
     const timer = setTimeout(() => {
-      revealMatchInElement(viewRef.current?.dom as HTMLElement | undefined, revealTarget.matchText)
+      if (!revealBlockInView(viewRef.current, revealTarget.blockId)) {
+        revealMatchInElement(viewRef.current?.dom as HTMLElement | undefined, revealTarget.matchText)
+      }
       consumeReveal(filePath)
     }, 120)
     return () => clearTimeout(timer)
@@ -262,7 +264,7 @@ export function ScreenplayProseMirrorEditor({ filePath, fileVersion, file, diffB
     const doc   = screenplaySchema.nodeFromJSON(epFileToScreenplayDoc(displayedFile, { includeEpisodeHeadings: true }))
     let state = EditorState.create({
       doc,
-      plugins: readonly ? [] : [...createScreenplayPlugins(), createFindPlugin()]
+      plugins: readonly ? createReadonlyScreenplayPlugins() : [...createScreenplayPlugins(), createFindPlugin()]
     })
     const cachedState = useEditorViewCacheStore.getState().getScreenplayState(filePath)
     if (cachedState) {
@@ -674,6 +676,17 @@ function slashCommandMatches(query: string, label: string) {
   const normalized = query.trim()
   if (!normalized) return true
   return label.includes(normalized) || '新增一集'.includes(normalized) || '新建一集'.includes(normalized)
+}
+
+function revealBlockInView(view: EditorView | null, blockId?: string): boolean {
+  if (!view || !blockId) return false
+  const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(blockId) : blockId.replace(/"/g, '\\"')
+  const node = view.dom.querySelector<HTMLElement>(`[data-id="${escaped}"]`)
+  if (!node) return false
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  node.classList.add('pm-reveal-flash')
+  window.setTimeout(() => node.classList.remove('pm-reveal-flash'), 1400)
+  return true
 }
 
 function screenplaySlashOptions(query: string): ScreenplaySlashOption[] {

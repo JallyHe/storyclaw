@@ -30,6 +30,14 @@ export function createScreenplayPlugins() {
   ]
 }
 
+export function createReadonlyScreenplayPlugins() {
+  return [
+    createEpisodeHeadingViewPlugin(),
+    createSpeechHighlightPlugin(),
+    createPaginationPlugin()
+  ]
+}
+
 function createEpisodeHeadingViewPlugin() {
   return new Plugin({
     props: {
@@ -291,6 +299,19 @@ type PaginationOptions = {
 }
 type PaginationSpacer = { pos: number; height: number }
 
+export function normalizePaginationMeasurement(value: number, zoom: number): number {
+  return zoom > 0 ? value / zoom : value
+}
+
+function readPaginationZoom(view: EditorView): number {
+  const zoomRoot = view.dom.closest('.doc-shell-canvas-inner') as HTMLElement | null
+  if (!zoomRoot) return 1
+  const style = window.getComputedStyle(zoomRoot)
+  const raw = String((style as CSSStyleDeclaration & { zoom?: string }).zoom || '1')
+  const zoom = Number.parseFloat(raw)
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+}
+
 export function buildScreenplayPaginationPlan(
   blocks: PaginationBlock[],
   options: PaginationOptions
@@ -399,6 +420,7 @@ function collectPaginationBlocks(view: EditorView): PaginationBlock[] {
   const blocks: PaginationBlock[] = []
   const paper = view.dom.closest('.pm-paper') as HTMLElement | null
   const paperTop = paper?.getBoundingClientRect().top ?? view.dom.getBoundingClientRect().top
+  const zoom = readPaginationZoom(view)
   let spacerHeightBefore = 0
   const spacers = (paginationKey.getState(view.state)?.find() ?? [])
     .map(item => ({ pos: item.from, height: Number(item.type.spec.height) || 0 }))
@@ -414,8 +436,8 @@ function collectPaginationBlocks(view: EditorView): PaginationBlock[] {
     const rect = dom.getBoundingClientRect()
     blocks.push({
       pos,
-      top: rect.top - paperTop - spacerHeightBefore,
-      bottom: rect.bottom - paperTop - spacerHeightBefore
+      top: normalizePaginationMeasurement(rect.top - paperTop, zoom) - spacerHeightBefore,
+      bottom: normalizePaginationMeasurement(rect.bottom - paperTop, zoom) - spacerHeightBefore
     })
   })
   return blocks

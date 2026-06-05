@@ -254,7 +254,7 @@ export interface VersionLine {
 
 export interface VersionWorkingFile {
   path: string
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked'
+  status: 'added' | 'modified' | 'deleted' | 'renamed'
 }
 
 export interface VersionSnapshot {

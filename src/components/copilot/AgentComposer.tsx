@@ -1110,8 +1110,11 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
               onDragLeave={() => setSkillImportDrag(false)}
               onDrop={handleSkillDrop}
             >
-              {skillImporting ? <span className="ac-upload-spin" /> : <Ic.folderPlus width={42} height={42} />}
-              <div>拖拽文件或点击上传</div>
+              {skillImporting ? <span className="ac-upload-spin" /> : <Ic.folderPlus width={30} height={30} />}
+              <div>
+                <strong>拖拽技能包到这里</strong>
+                <span>或点击选择 .zip</span>
+              </div>
             </div>
             <div className="skill-upload-actions">
               <button onClick={() => void chooseSkillPackage('folder')} disabled={skillImporting}>选择文件夹</button>

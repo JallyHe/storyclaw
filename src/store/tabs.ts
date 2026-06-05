@@ -7,6 +7,7 @@ export interface RevealTarget {
   column: number        // 0-based
   length: number        // match length in chars
   matchText: string     // the exact matched substring (for DOM-based reveal)
+  blockId?: string      // structured editors can reveal exact block nodes
   nonce: number         // bumps on every request so identical targets re-trigger
 }
 

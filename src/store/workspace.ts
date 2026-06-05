@@ -26,6 +26,7 @@ interface WorkspaceState {
   clipboard: ClipboardState | null
   cutSourceId: string | null
   openWorkspace: (dir: string) => Promise<void>
+  closeWorkspace: () => Promise<void>
   refreshTree: () => Promise<void>
   getFile: (path: string) => Promise<StoryFile>
   saveFile: (path: string, data: StoryFile) => Promise<void>
@@ -68,6 +69,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({
       root: dir,
       tree,
+      fileCache: new Map(),
+      fileVersions: new Map(),
+      dirtySet: new Set(),
+      editingNodeId: null,
+      editingValue: '',
+      editingMode: null,
+      clipboard: null,
+      cutSourceId: null
+    })
+  },
+
+  closeWorkspace: async () => {
+    await workspaceIpc.close()
+    useTabsStore.getState().closeAllTabs()
+    useChangesStore.getState().rejectAll()
+    set({
+      root: null,
+      tree: [],
       fileCache: new Map(),
       fileVersions: new Map(),
       dirtySet: new Set(),

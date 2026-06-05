@@ -24,6 +24,7 @@ interface Window {
       workspace: {
         openDialog(): Promise<string | null>
         open(dir: string): Promise<TreeNode[]>
+        close(): Promise<void>
         tree(dir: string): Promise<TreeNode[]>
         create(opts: NewProjectOptions): Promise<string>
         readFile(path: string): Promise<StoryFile>

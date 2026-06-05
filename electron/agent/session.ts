@@ -16,6 +16,14 @@ export async function startAgentSession(workspaceRoot: string, win: BrowserWindo
   await Promise.all(disposes)
 }
 
+export async function closeAgentSession(): Promise<void> {
+  cachedWorkspaceRoot = ''
+  cachedWin = null
+  const disposes = [...runtimePool.values()].map(rt => rt.dispose())
+  runtimePool.clear()
+  await Promise.all(disposes)
+}
+
 async function getOrCreateRuntime(sessionId: string): Promise<StoryClawAgentRuntime> {
   let rt = runtimePool.get(sessionId)
   if (!rt) {

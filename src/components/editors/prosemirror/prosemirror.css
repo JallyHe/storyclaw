@@ -109,6 +109,15 @@
   text-decoration: line-through;
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--diff-del-fg) 70%, transparent);
 }
+.pm-screenplay .pm-reveal-flash {
+  outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  outline-offset: 4px;
+  animation: pm-reveal-flash 1.4s ease-out;
+}
+@keyframes pm-reveal-flash {
+  0% { background-color: color-mix(in srgb, var(--accent) 24%, transparent); }
+  100% { background-color: transparent; }
+}
 .pm-diff-review-pop {
   position: absolute;
   z-index: 45;

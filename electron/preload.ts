@@ -23,6 +23,7 @@ const api = {
   workspace: {
     openDialog:   (): Promise<string | null>                          => ipcRenderer.invoke('workspace:openDialog'),
     open:         (dir: string): Promise<TreeNode[]>                  => ipcRenderer.invoke('workspace:open', dir),
+    close:        (): Promise<void>                                   => ipcRenderer.invoke('workspace:close'),
     tree:         (dir: string): Promise<TreeNode[]>                  => ipcRenderer.invoke('workspace:tree', dir),
     create:       (opts: NewProjectOptions): Promise<string>          => ipcRenderer.invoke('workspace:create', opts),
     readFile:     (path: string): Promise<StoryFile>                  => ipcRenderer.invoke('workspace:readFile', path),

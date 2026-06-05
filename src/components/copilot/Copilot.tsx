@@ -6,6 +6,7 @@ import { AgentComposer, type AgentComposerHandle } from './AgentComposer'
 import { PermissionDialog } from '@/components/agent/PermissionDialog'
 import { Ic } from '@/components/icons'
 import { countSessionMessages, formatSessionRelativeTime } from '@/store/sessionMetadata'
+import type { Block } from '@/types'
 
 const QUICK_ACTIONS = [
   { id: 'continue',    label: '续写本场',    icon: Ic.feather, prompt: '请续写当前剧本场景，保持人物语气和既有情节连贯。' },
@@ -14,6 +15,12 @@ const QUICK_ACTIONS = [
   { id: 'consistency', label: '一致性检查',   icon: Ic.fileRole, prompt: '请检查当前项目的人物、设定、时间线和情节一致性问题。' },
   { id: 'plot',        label: '梳理情节',    icon: Ic.compass, prompt: '请梳理当前故事情节，指出主线推进、悬念释放和节奏问题。' },
 ]
+
+function blockPreview(block: Block): string {
+  if (block.type === 'character') return block.name + (block.ext ? `（${block.ext}）` : '')
+  if (block.type === 'scene') return [`第 ${block.number} 场`, block.location, block.intext, block.time].filter(Boolean).join(' ') || '场景'
+  return block.text || block.type
+}
 
 interface Props { width: number }
 
@@ -62,9 +69,15 @@ export function Copilot({ width }: Props) {
   const changeList = [...changes.entries()]
   const totalAdd = changeList.reduce((total, [, change]) => total + change.diffBlocks.filter(block => block.diff === 'add').length, 0)
   const totalDel = changeList.reduce((total, [, change]) => total + change.diffBlocks.filter(block => block.diff === 'del').length, 0)
-  const openChange = (fileId: string) => {
+  const openChange = (fileId: string, block?: Block) => {
     setView('editor')
-    openTab(fileId)
+    openTab(fileId, {
+      line: 1,
+      column: 0,
+      length: Math.max(1, block ? blockPreview(block).length : 1),
+      matchText: block ? blockPreview(block) : '',
+      blockId: block?.id
+    })
   }
 
   return (
@@ -137,15 +150,16 @@ export function Copilot({ width }: Props) {
                     const name = fileId.split(/[\\/]/).pop() ?? fileId
                     const adds = change.diffBlocks.filter(block => block.diff === 'add')
                     const dels = change.diffBlocks.filter(block => block.diff === 'del')
+                    const firstChangedBlock = change.diffBlocks.find(block => block.diff)?.blk
                     const preview = change.diffBlocks
                       .filter(block => block.diff)
                       .slice(0, 4)
                       .map(block => ({
                         diff: block.diff,
-                        text: 'text' in block.blk ? block.blk.text : 'location' in block.blk ? block.blk.location : block.blk.type
+                        text: blockPreview(block.blk)
                       }))
                     return (
-                      <button key={fileId} type="button" className="cp-change-file" onClick={() => openChange(fileId)}>
+                      <button key={fileId} type="button" className="cp-change-file" onClick={() => openChange(fileId, firstChangedBlock)}>
                         <span className="cp-change-file-row">
                           <span className="cp-change-name">{name}</span>
                           <span className="cp-changes-stat">

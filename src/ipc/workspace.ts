@@ -6,6 +6,7 @@ export type { FileSearchResult, SearchMatch, SearchOptions } from '@/types'
 export const workspaceIpc = {
   openDialog: (): Promise<string | null>                        => getApi().workspace.openDialog(),
   open:       (dir: string): Promise<TreeNode[]>                => getApi().workspace.open(dir),
+  close:      (): Promise<void>                                 => getApi().workspace.close(),
   tree:       (dir: string): Promise<TreeNode[]>                => getApi().workspace.tree(dir),
   create:     (opts: NewProjectOptions): Promise<string>        => getApi().workspace.create(opts),
   readFile:   (path: string): Promise<StoryFile>                => getApi().workspace.readFile(path),

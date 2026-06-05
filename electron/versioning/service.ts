@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, readFile, stat, writeFile } from 'node:fs/promises'
+import { access, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -35,7 +35,7 @@ export interface VersionLine {
 
 export interface VersionWorkingFile {
   path: string
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked'
+  status: 'added' | 'modified' | 'deleted' | 'renamed'
 }
 
 export interface VersionSnapshot {
@@ -333,7 +333,7 @@ function workingStatusFromCode(code: string): VersionWorkingFile['status'] {
   if (code.includes('R')) return 'renamed'
   if (code.includes('D')) return 'deleted'
   if (code.includes('A')) return 'added'
-  if (code.includes('?')) return 'untracked'
+  if (code.includes('?')) return 'added'
   return 'modified'
 }
 
@@ -348,16 +348,46 @@ function normalizePorcelainPath(rawPath: string): string {
 async function listWorkingFiles(root: string): Promise<VersionWorkingFile[]> {
   await ensureVersioning(root)
   const raw = await runGit(root, ['status', '--porcelain']).catch(() => '')
-  return raw.split('\n').filter(Boolean).map(row => {
+  const entries = await Promise.all(raw.split('\n').filter(Boolean).map(async row => {
     const match = /^(.{2})\s+(.+)$/u.exec(row)
     const code = match?.[1] ?? row.slice(0, 2)
     const rawPath = (match?.[2] ?? row.slice(2)).trim()
     const renamedPath = rawPath.includes(' -> ') ? rawPath.split(' -> ').at(-1) ?? rawPath : rawPath
-    return {
-      path: normalizePorcelainPath(renamedPath),
-      status: workingStatusFromCode(code)
+    const normalizedPath = normalizePorcelainPath(renamedPath)
+    const status = workingStatusFromCode(code)
+    if (code.includes('?')) {
+      const expanded = await expandUntrackedPath(root, normalizedPath)
+      if (expanded.length > 0) return expanded.map(filePath => ({ path: filePath, status }))
     }
-  })
+    return {
+      path: normalizedPath,
+      status
+    }
+  }))
+  return entries.flat().sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'))
+}
+
+async function expandUntrackedPath(root: string, relativePath: string): Promise<string[]> {
+  const absolute = path.join(root, relativePath)
+  const info = await stat(absolute).catch(() => null)
+  if (!info) return []
+  if (info.isFile()) return [relativePath.replace(/\\/g, '/')]
+  if (!info.isDirectory()) return []
+  const files: string[] = []
+  const walk = async (dir: string) => {
+    const items = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const item of items) {
+      if (item.name === '.git' || item.name === APP_DIR) continue
+      const fullPath = path.join(dir, item.name)
+      if (item.isDirectory()) {
+        await walk(fullPath)
+      } else if (item.isFile()) {
+        files.push(path.relative(root, fullPath).replace(/\\/g, '/'))
+      }
+    }
+  }
+  await walk(absolute)
+  return files
 }
 
 async function lineNameForCommit(root: string, id: string, fallbackBranch: string): Promise<string> {

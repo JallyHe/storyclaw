@@ -26,7 +26,7 @@ import {
 } from './fs/workspace'
 import { exportScreenplayFile } from './fs/export'
 import type { NewProjectOptions, SearchOptions } from '../src/types'
-import { getWorkspaceRoot, setAgentModel, startAgentSession, sendPrompt, stopAgent } from './agent/session'
+import { closeAgentSession, getWorkspaceRoot, setAgentModel, startAgentSession, sendPrompt, stopAgent } from './agent/session'
 import { loadAgentSnapshot, saveAgentSnapshot } from './agent/persistence'
 import { listAgentResources } from './agent/skills'
 import { installSkillPackage } from './agent/skillImport'
@@ -237,12 +237,19 @@ ipcMain.handle('workspace:open', async (_e, dir: string) => {
   return tree
 })
 
+ipcMain.handle('workspace:close', async () => {
+  if (stopWatch) { stopWatch(); stopWatch = null }
+  await closeAgentSession()
+})
+
 ipcMain.handle('workspace:tree', async (_e, dir: string) => {
   return buildTree(dir)
 })
 
 ipcMain.handle('workspace:create', async (_e, opts: NewProjectOptions) => {
-  return scaffoldProject(opts)
+  const root = await scaffoldProject(opts)
+  await saveVersion(root, '创建项目')
+  return root
 })
 
 ipcMain.handle('workspace:readFile', async (_e, filePath: string) => {

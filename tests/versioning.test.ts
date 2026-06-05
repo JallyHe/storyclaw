@@ -53,7 +53,7 @@ describe('local versioning service', () => {
     expect(snapshot.currentFiles).toContainEqual({ path: '剧本.ep', status: 'modified' })
   }, 15000)
 
-  it('reports untracked current files with spaces without porcelain quotes', async () => {
+  it('reports new current files with spaces as added files without porcelain quotes', async () => {
     const root = await makeWorkspace()
     const folder = path.join(root, '人物')
     const filePath = path.join(folder, '主角 (1).chr')
@@ -65,7 +65,26 @@ describe('local versioning service', () => {
 
     const snapshot = await getVersionSnapshot(root)
 
-    expect(snapshot.currentFiles).toContainEqual({ path: '人物/主角 (1).chr', status: 'untracked' })
+    expect(snapshot.currentFiles).toContainEqual({ path: '人物/主角 (1).chr', status: 'added' })
+  }, 15000)
+
+  it('records new files when saving the next version', async () => {
+    const root = await makeWorkspace()
+    const folder = path.join(root, '参考')
+    const filePath = path.join(folder, '素材.txt')
+
+    await mkdir(folder, { recursive: true })
+    await saveVersion(root, '初始版本')
+    await writeFile(filePath, '新上传素材', 'utf-8')
+
+    const beforeSave = await getVersionSnapshot(root)
+    expect(beforeSave.currentFiles).toContainEqual({ path: '参考/素材.txt', status: 'added' })
+
+    await saveVersion(root, '加入素材')
+    const afterSave = await getVersionSnapshot(root)
+
+    expect(afterSave.currentFiles).toEqual([])
+    expect(afterSave.records[0].changedFiles).toContain('参考/素材.txt')
   }, 15000)
 
   it('creates named creative version lines', async () => {

@@ -163,9 +163,7 @@ export class StoryClawAgentRuntime {
     const { cleanText, attachments } = await this.resolveFileMentions(text)
     const projectConfig = await this.readProjectConfigBlock()
     const context = [getModeConfig(mode).systemSuffix, projectConfig].filter(Boolean).join('\n\n')
-    const body = attachments
-      ? `${context}\n\n用户请求：${cleanText}\n\n${attachments}`
-      : `${context}\n\n用户请求：${cleanText}`
+    const body = buildPromptBody(cleanText, context, attachments)
     await session.prompt(body)
   }
 
@@ -262,9 +260,7 @@ export class StoryClawAgentRuntime {
     const { cleanText, attachments } = await this.resolveFileMentions(text)
     const projectConfig = await this.readProjectConfigBlock()
     const context = [getModeConfig(mode).systemSuffix, projectConfig, extraInstruction].filter(Boolean).join('\n\n')
-    const body = attachments
-      ? `${context}\n\n用户请求：${cleanText}\n\n${attachments}`
-      : `${context}\n\n用户请求：${cleanText}`
+    const body = buildPromptBody(cleanText, context, attachments)
 
     return await new Promise<string>((resolve, reject) => {
       let collected = ''
@@ -362,4 +358,31 @@ export class StoryClawAgentRuntime {
       })
       .filter((item): item is { model: NonNullable<ReturnType<ModelRegistry['find']>> } => Boolean(item))
   }
+}
+
+export function extractExplicitSkillRequest(text: string): { skillName: string; requestText: string } | null {
+  const trimmed = text.trim()
+  const slash = trimmed.match(/^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/)
+  if (slash) {
+    return {
+      skillName: slash[1],
+      requestText: slash[2]?.trim() ?? ''
+    }
+  }
+
+  const mention = trimmed.match(/(?:^|\s)@skill:([^\s|]+)(?:\|[^\s]+)?/)
+  if (!mention) return null
+  return {
+    skillName: mention[1],
+    requestText: trimmed.replace(mention[0], mention[0].startsWith(' ') ? ' ' : '').replace(/\s+/g, ' ').trim()
+  }
+}
+
+export function buildPromptBody(cleanText: string, context: string, attachments: string): string {
+  const skill = extractExplicitSkillRequest(cleanText)
+  const requestText = skill?.requestText || cleanText
+  const payload = attachments
+    ? `${context}\n\n用户请求：${requestText}\n\n${attachments}`
+    : `${context}\n\n用户请求：${requestText}`
+  return skill ? `/skill:${skill.skillName} ${payload}` : payload
 }

@@ -36,4 +36,20 @@ describe('tabs store', () => {
     expect(useTabsStore.getState().activeFile).toBeNull()
     expect(useTabsStore.getState().revealTarget).toBeNull()
   })
+
+  it('keeps a structured block id on reveal targets', () => {
+    useTabsStore.getState().openTab('a.ep', {
+      line: 1,
+      column: 0,
+      length: 3,
+      matchText: '第二场',
+      blockId: 'scene-2'
+    })
+
+    expect(useTabsStore.getState().revealTarget).toMatchObject({
+      path: 'a.ep',
+      matchText: '第二场',
+      blockId: 'scene-2'
+    })
+  })
 })

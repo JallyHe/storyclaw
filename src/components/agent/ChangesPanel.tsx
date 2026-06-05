@@ -3,9 +3,15 @@ import { useChangesStore, useTabsStore, useUiStore } from '@/store'
 import { FILE_KIND, Ic } from '@/components/icons'
 import type { DiffBlock } from '@/types'
 
+function blockPreview(block: DiffBlock['blk']): string {
+  if (block.type === 'character') return block.name + (block.ext ? `（${block.ext}）` : '')
+  if (block.type === 'scene') return [`第 ${block.number} 场`, block.location, block.intext, block.time].filter(Boolean).join(' ') || '场景'
+  return block.text || block.type
+}
+
 function ChangeRow({ fileId, diffBlocks, applied, summary, onOpen, onAccept, onReject }: {
   fileId: string; diffBlocks: DiffBlock[]
-  applied?: boolean; summary?: string; onOpen: (id: string) => void
+  applied?: boolean; summary?: string; onOpen: (id: string, block?: DiffBlock['blk']) => void
   onAccept: (id: string) => void; onReject: (id: string) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -46,9 +52,8 @@ function ChangeRow({ fileId, diffBlocks, applied, summary, onOpen, onAccept, onR
     .filter(b => b.diff)
     .map(b => ({
       t: b.diff as 'add' | 'del',
-      s: b.blk.type === 'character'
-        ? b.blk.name + (b.blk.ext ? `（${b.blk.ext}）` : '')
-        : ('text' in b.blk ? b.blk.text : '') || ('location' in b.blk ? b.blk.location : '') || b.blk.type
+      block: b.blk,
+      s: blockPreview(b.blk)
     }))
 
   return (
@@ -75,10 +80,10 @@ function ChangeRow({ fileId, diffBlocks, applied, summary, onOpen, onAccept, onR
       {open && mini.length > 0 && (
         <div className="change-diff">
           {mini.map((d, i) => (
-            <span key={i} className={`l ${d.t}`}>
+            <button key={i} type="button" className={`l ${d.t}`} onClick={() => onOpen(fileId, d.block)} title="打开并跳到这处改动">
               <span className="sign">{d.t === 'add' ? '+' : '−'}</span>
               {d.s}
-            </span>
+            </button>
           ))}
         </div>
       )}
@@ -102,7 +107,16 @@ export function ChangesPanel({ width }: Props) {
   const setView = useUiStore(s => s.setView)
   // Open in the editor: switch to the editor view first, then open the tab,
   // otherwise nothing visibly happens while the user is on the Agent page.
-  const openInEditor = (id: string) => { setView('editor'); openTab(id) }
+  const openInEditor = (id: string, block?: DiffBlock['blk']) => {
+    setView('editor')
+    openTab(id, {
+      line: 1,
+      column: 0,
+      length: Math.max(1, block ? blockPreview(block).length : 1),
+      matchText: block ? blockPreview(block) : '',
+      blockId: block?.id
+    })
+  }
   const list = [...changes.entries()]
 
   const totalAdd = list.reduce((a, [, c]) => a + c.diffBlocks.filter(b => b.diff === 'add').length, 0)
