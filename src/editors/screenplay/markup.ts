@@ -155,14 +155,33 @@ function serializeSingleScreenplayMarkup(file: EpFile): string {
     metaLine('status', file.status || 'wip'),
     ...(file.logline ? [metaLine('logline', file.logline)] : [])
   ]
-  const body = file.blocks.map(block => {
-    if (block.type === 'scene') return `# ${formatSceneMarkup(block)}`
-    if (block.type === 'transition') return `> ${block.text.trim()}`
-    if (block.type === 'dialogue') return normalizeDialogueCandidate(block.text)
-    if (block.type === 'character') return `${block.name}${block.ext ? `（${block.ext}）` : ''}`
-    if (block.type === 'paren') return `（${block.text.trim()}）`
-    return block.text.trim()
-  }).filter(Boolean).join('\n\n')
+
+  // Collect serialized text alongside block type so we can choose the right separator.
+  const parts: Array<{ text: string; type: Block['type'] }> = []
+  for (const block of file.blocks) {
+    let text: string
+    if (block.type === 'scene')      text = `# ${formatSceneMarkup(block)}`
+    else if (block.type === 'transition') text = `> ${block.text.trim()}`
+    else if (block.type === 'dialogue')   text = normalizeDialogueCandidate(block.text)
+    else if (block.type === 'character')  text = `${block.name}${block.ext ? `（${block.ext}）` : ''}`
+    else if (block.type === 'paren')      text = `（${block.text.trim()}）`
+    else                                  text = block.text.trim()   // action
+    if (text) parts.push({ text, type: block.type })
+  }
+
+  let body = ''
+  for (let i = 0; i < parts.length; i++) {
+    if (i === 0) { body += parts[i].text; continue }
+    const prev = parts[i - 1]
+    const curr = parts[i]
+    // \n\n required: two consecutive action blocks (parser uses blank lines to split them)
+    //              or any scene boundary (visual clarity for major structural element)
+    const needsBlank =
+      (prev.type === 'action' && curr.type === 'action') ||
+      prev.type === 'scene' || curr.type === 'scene'
+    body += (needsBlank ? '\n\n' : '\n') + curr.text
+  }
+
   return `${metadataLines.join('\n')}\n\n${body}`.trim()
 }
 
