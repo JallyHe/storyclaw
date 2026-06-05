@@ -3,7 +3,6 @@ import { useChangesStore, useCopilotDraftStore, useSessionsStore, useTabsStore, 
 import { useAgentEvents } from '@/hooks/useAgentEvents'
 import { Message } from './Message'
 import { AgentComposer, type AgentComposerHandle } from './AgentComposer'
-import { PermissionDialog } from '@/components/agent/PermissionDialog'
 import { Ic } from '@/components/icons'
 import { countSessionMessages, formatSessionRelativeTime } from '@/store/sessionMetadata'
 import type { Block } from '@/types'
@@ -201,7 +200,7 @@ export function Copilot({ width }: Props) {
                 </div>
               </div>
             )}
-            {messages.map((m, i) => <Message key={i} m={m} />)}
+            {messages.map((m, i) => <Message key={i} m={m} sessionId={session?.id ?? ''} index={i} />)}
             {!empty && !busy && (
               <div className="cp-actions" style={{ marginTop: 2 }}>
                 {QUICK_ACTIONS.map(a => (
@@ -218,7 +217,6 @@ export function Copilot({ width }: Props) {
           </div>
         </>
       )}
-      <PermissionDialog />
     </div>
   )
 }

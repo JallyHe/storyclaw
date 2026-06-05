@@ -17,7 +17,7 @@ import { ALL_TOOLS, initTools, setAgentToolMode, setAgentPermission } from './to
 import { setupStreaming } from './streaming'
 import { getModeConfig, STORYCLAW_TOOL_NAMES } from './policy'
 import { loadAgentConfig, prepareAgentModelRuntime, saveAgentConfig } from './config'
-import { initSubagentRuntime, spawnSubagent, getSkillsDir, getWorkspaceSkillsDir } from './skills'
+import { initSubagentRuntime, spawnSubagent, getMainSessionSkillDirs } from './skills'
 import { readTextFile } from '../fs/workspace'
 
 const BASE_SYSTEM_PROMPT = `你是 StoryClaw 的 AI 剧本创作助手。
@@ -41,6 +41,7 @@ const BASE_SYSTEM_PROMPT = `你是 StoryClaw 的 AI 剧本创作助手。
 ## 工具使用规则
 - 先用 list_workspace 了解项目结构，再用 read_screenplay 读取具体文件
 - 只有在 Craft 模式下才可以使用 write_screenplay
+- Craft 模式下可用 fetch_url 访问公开网页，可用 bash 在当前工作区执行终端命令；外部 Skill 如要求浏览网页、Shell、Python、Node.js、npx 或生成 .docx/.pdf 等文件，可通过这些工具完成。默认权限会请求用户确认，完全放开权限会自动执行；不要把“需要确认”误解为隔离沙箱或无权限。
 - 文件会直接写入磁盘（default 权限模式需用户逐次授权）
 - 使用 read_reference 读取参考/目录下的参考资料（支持 pdf/docx/txt/md/rtf/csv/json 等文档）
 
@@ -113,8 +114,8 @@ export class StoryClawAgentRuntime {
         modelRegistry: modelRuntime.modelRegistry,
         settingsManager,
         resourceLoaderOptions: {
-          // 加载随应用分发的创作 Skill，以及当前项目 .storyclaw/skills 下的外部 Skill。
-          additionalSkillPaths: [getSkillsDir(), getWorkspaceSkillsDir(cwd)],
+          // 加载随应用分发、用户全局与当前项目下的 Skill。
+          additionalSkillPaths: getMainSessionSkillDirs(cwd),
           systemPromptOverride: () => BASE_SYSTEM_PROMPT
         }
       })
@@ -162,7 +163,7 @@ export class StoryClawAgentRuntime {
     setAgentPermission(permission)
     const { cleanText, attachments } = await this.resolveFileMentions(text)
     const projectConfig = await this.readProjectConfigBlock()
-    const context = [getModeConfig(mode).systemSuffix, projectConfig].filter(Boolean).join('\n\n')
+    const context = [getModeConfig(mode).systemSuffix, buildPermissionInstruction(mode, permission), projectConfig].filter(Boolean).join('\n\n')
     const body = buildPromptBody(cleanText, context, attachments)
     await session.prompt(body)
   }
@@ -259,7 +260,7 @@ export class StoryClawAgentRuntime {
     setAgentPermission('default')
     const { cleanText, attachments } = await this.resolveFileMentions(text)
     const projectConfig = await this.readProjectConfigBlock()
-    const context = [getModeConfig(mode).systemSuffix, projectConfig, extraInstruction].filter(Boolean).join('\n\n')
+    const context = [getModeConfig(mode).systemSuffix, buildPermissionInstruction(mode, 'default'), projectConfig, extraInstruction].filter(Boolean).join('\n\n')
     const body = buildPromptBody(cleanText, context, attachments)
 
     return await new Promise<string>((resolve, reject) => {
@@ -385,4 +386,14 @@ export function buildPromptBody(cleanText: string, context: string, attachments:
     ? `${context}\n\n用户请求：${requestText}\n\n${attachments}`
     : `${context}\n\n用户请求：${requestText}`
   return skill ? `/skill:${skill.skillName} ${payload}` : payload
+}
+
+export function buildPermissionInstruction(mode: AgentMode, permission: AgentPermission): string {
+  if (mode !== 'craft') {
+    return '权限说明：当前不是 Craft 模式，不能调用 bash、fetch_url 或写入工具。若任务需要命令执行、联网检索或安装技能，请明确提示用户切换到 Craft 模式。'
+  }
+  if (permission === 'full') {
+    return '权限说明：当前是 Craft + 完全放开。需要命令执行、联网检索、npx、Python/Node 脚本或文件生成时，直接调用 bash 或 fetch_url；不要声称无 Shell 权限、无互联网、处于沙箱或无法执行。只有工具实际返回错误后，才报告具体错误。'
+  }
+  return '权限说明：当前是 Craft + 默认权限。你拥有 bash 和 fetch_url，但每次调用会自动弹出用户授权框；这不是无权限，也不是隔离沙箱。需要执行命令、访问互联网、运行 npx、Python/Node 脚本或安装/检索 Skill 时，必须先调用对应工具触发授权，不要在未调用工具前回复“无权限”“无法访问互联网”“无法执行 npx”或类似拒绝。若用户拒绝授权或工具返回错误，再把具体原因告诉用户。'
 }

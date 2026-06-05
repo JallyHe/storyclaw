@@ -6,6 +6,8 @@ const TOOL_LABELS: Record<string, string> = {
   write_screenplay: '修改剧本文件',
   list_workspace:   '列出工作区',
   read_reference:   '读取参考资料',
+  bash:             '执行终端命令',
+  fetch_url:        '访问网页',
   spawn_subagent:   '调度阶段子代理'
 }
 
@@ -62,7 +64,7 @@ export function setupStreaming(session: any, win: BrowserWindow, sessionId: stri
           tool: event.toolName,
           label: TOOL_LABELS[event.toolName] ?? event.toolName,
           // args is the correct field (not toolInput) per SDK types
-          target: event.args?.path ?? event.args?.query ?? ''
+          target: event.args?.path ?? event.args?.query ?? event.args?.command ?? event.args?.url ?? ''
         })
         break
 

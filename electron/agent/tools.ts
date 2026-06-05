@@ -1,5 +1,9 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { execFile } from 'child_process'
+import { ipcMain } from 'electron'
+import { randomUUID } from 'crypto'
+import { promisify } from 'util'
 import { defineTool } from '@earendil-works/pi-coding-agent'
 import { Type } from '@sinclair/typebox'
 import { buildTree, readStoryFile, readTextFile } from '../fs/workspace'
@@ -11,6 +15,8 @@ import { assertToolAllowed } from './policy'
 let workspaceRoot = ''
 let currentWin: BrowserWindow | null = null
 let currentMode: AgentMode = 'craft'
+let currentPermission: AgentPermission = 'default'
+const execFileAsync = promisify(execFile)
 
 export function initTools(root: string, win: BrowserWindow) {
   workspaceRoot = root
@@ -26,8 +32,8 @@ export function getAgentToolMode(): AgentMode {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function setAgentPermission(_permission: AgentPermission) {
-  // Reserved for future use
+export function setAgentPermission(permission: AgentPermission) {
+  currentPermission = permission
 }
 
 function resolveWorkspacePath(relPath: string): string {
@@ -92,7 +98,134 @@ function computeBlockDiff(oldFile: StoryFile, newFile: StoryFile): DiffBlock[] {
   return result
 }
 
+async function requestToolPermission(tool: string, target: string, description: string): Promise<void> {
+  if (currentPermission === 'full') return
+  if (!currentWin) throw new Error('无法请求权限：窗口未初始化')
+  const requestId = randomUUID()
+  currentWin.webContents.send('agent:event', {
+    type: 'permission_request',
+    requestId,
+    tool,
+    target,
+    description
+  })
+  const approved = await new Promise<boolean>(resolve => {
+    ipcMain.once(`agent:permission-response:${requestId}`, (_event, value: boolean) => resolve(Boolean(value)))
+  })
+  if (!approved) throw new Error(`用户拒绝授权：${description}`)
+}
+
+function truncateOutput(text: string): string {
+  const max = 16000
+  if (text.length <= max) return text
+  return `${text.slice(0, max)}\n...（输出已截断）`
+}
+
+function requireHttpUrl(value: string): URL {
+  const url = new URL(value)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`Only http/https URLs are supported: ${value}`)
+  }
+  return url
+}
+
+async function runWorkspaceCommand(command: string): Promise<{ stdout: string; stderr: string }> {
+  const options = {
+    cwd: workspaceRoot,
+    windowsHide: true,
+    timeout: 120000,
+    maxBuffer: 1024 * 1024 * 8
+  }
+  if (process.platform === 'win32') {
+    const { stdout, stderr } = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      command
+    ], options)
+    return { stdout, stderr }
+  }
+  const { stdout, stderr } = await execFileAsync('/bin/bash', ['-lc', command], options)
+  return { stdout, stderr }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
+
+export const bashTool = defineTool({
+  name: 'bash',
+  label: '执行终端命令',
+  description: `在当前 StoryClaw 工作区内执行终端命令，用于外部 Skill 运行脚本、调用 Python/Node、生成 docx/pdf 等文件。
+- Windows 下使用 PowerShell；macOS/Linux 下使用 bash。
+- 工作目录固定为当前项目根目录。
+- 仅 Craft 模式可用；默认权限会先请求用户确认，完全放开权限会自动执行。
+- 命令应尽量只读写当前工作区内文件。`,
+  parameters: Type.Object({
+    command: Type.String({ description: '要执行的终端命令。Windows 项目中可写 PowerShell 命令，例如 python scripts/build.py 或 node scripts/build.mjs。' })
+  }),
+  execute: async (_id, { command }) => {
+    assertToolAllowed(currentMode, 'bash')
+    const cmd = requireString(command, 'command')
+    await requestToolPermission('bash', cmd, `执行终端命令：${cmd}`)
+    try {
+      const { stdout, stderr } = await runWorkspaceCommand(cmd)
+      const text = [
+        stdout ? `stdout:\n${stdout}` : '',
+        stderr ? `stderr:\n${stderr}` : ''
+      ].filter(Boolean).join('\n\n') || '命令执行完成，无输出。'
+      return { content: [{ type: 'text' as const, text: truncateOutput(text) }], details: { command: cmd, isError: false } }
+    } catch (err: any) {
+      const stdout = err?.stdout ? `stdout:\n${err.stdout}` : ''
+      const stderr = err?.stderr ? `stderr:\n${err.stderr}` : ''
+      const message = [stdout, stderr, err?.message ? `error:\n${err.message}` : '命令执行失败'].filter(Boolean).join('\n\n')
+      return { content: [{ type: 'text' as const, text: truncateOutput(message) }], details: { command: cmd, isError: true } }
+    }
+  }
+})
+
+export const fetchUrlTool = defineTool({
+  name: 'fetch_url',
+  label: '访问网页',
+  description: `读取公开网页内容，用于外部 Skill 检索文档、skills.sh 页面或其他公开资料。
+- 仅支持 http/https URL。
+- 仅 Craft 模式可用；默认权限会先请求用户确认，完全放开权限会自动访问。
+- 如 Skill 要求浏览 skills.sh，可先用本工具读取页面；如需要运行 npx，则改用 bash。`,
+  parameters: Type.Object({
+    url: Type.String({ description: '要访问的 http/https URL，例如 https://skills.sh/' })
+  }),
+  execute: async (_id, { url }) => {
+    assertToolAllowed(currentMode, 'fetch_url')
+    const target = requireHttpUrl(requireString(url, 'url')).toString()
+    await requestToolPermission('fetch_url', target, `访问网页：${target}`)
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 30000)
+    try {
+      const res = await fetch(target, {
+        signal: controller.signal,
+        headers: {
+          'user-agent': 'StoryClaw-Agent/1.0'
+        }
+      })
+      const contentType = res.headers.get('content-type') ?? ''
+      const raw = await res.text()
+      const text = [
+        `status: ${res.status} ${res.statusText}`,
+        contentType ? `content-type: ${contentType}` : '',
+        '',
+        raw
+      ].filter(Boolean).join('\n')
+      return { content: [{ type: 'text' as const, text: truncateOutput(text) }], details: { url: target, status: res.status, isError: !res.ok } }
+    } catch (err: any) {
+      return {
+        content: [{ type: 'text' as const, text: `访问失败：${err?.message ?? String(err)}` }],
+        details: { url: target, status: 0, isError: true }
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+})
 
 export const readScreenplay = defineTool({
   name: 'read_screenplay',
@@ -236,4 +369,4 @@ export const readReference = defineTool({
 
 import { FORMAT_TOOLS } from './formatTools'
 
-export const ALL_TOOLS = [readScreenplay, readSelection, writeScreenplay, listWorkspace, readReference, ...FORMAT_TOOLS]
+export const ALL_TOOLS = [readScreenplay, readSelection, writeScreenplay, listWorkspace, readReference, bashTool, fetchUrlTool, ...FORMAT_TOOLS]

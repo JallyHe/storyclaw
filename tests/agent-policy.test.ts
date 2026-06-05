@@ -12,11 +12,15 @@ describe('agent mode policy', () => {
       'read_reference',
       'match_screenplay_format',
       'apply_format_template',
+      'bash',
+      'fetch_url',
       'write_screenplay',
       'spawn_subagent',
       'save_format_template'
     ])
     expect(() => assertToolAllowed('craft', 'write_screenplay')).not.toThrow()
+    expect(() => assertToolAllowed('craft', 'bash')).not.toThrow()
+    expect(() => assertToolAllowed('craft', 'fetch_url')).not.toThrow()
     expect(() => assertToolAllowed('craft', 'save_format_template')).not.toThrow()
     expect(() => assertToolAllowed('craft', 'spawn_subagent')).not.toThrow()
   })
@@ -36,6 +40,8 @@ describe('agent mode policy', () => {
       'apply_format_template'
     ])
     expect(() => assertToolAllowed('plan', 'write_screenplay')).toThrow(/Plan mode/)
+    expect(() => assertToolAllowed('plan', 'bash')).toThrow(/Plan mode/)
+    expect(() => assertToolAllowed('plan', 'fetch_url')).toThrow(/Plan mode/)
     expect(() => assertToolAllowed('plan', 'save_format_template')).toThrow(/Plan mode/)
   })
 
@@ -50,6 +56,8 @@ describe('agent mode policy', () => {
     ])
     expect(getModeConfig('ask').systemSuffix).toContain('只回答问题')
     expect(() => assertToolAllowed('ask', 'write_screenplay')).toThrow(/Ask mode/)
+    expect(() => assertToolAllowed('ask', 'bash')).toThrow(/Ask mode/)
+    expect(() => assertToolAllowed('ask', 'fetch_url')).toThrow(/Ask mode/)
     expect(() => assertToolAllowed('ask', 'save_format_template')).toThrow(/Ask mode/)
   })
 })

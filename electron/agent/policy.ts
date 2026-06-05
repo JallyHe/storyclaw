@@ -15,6 +15,8 @@ export const WORKSPACE_TOOL_NAMES = [
 /** 主会话暴露的全部工具（含阶段专家子代理派发工具）。 */
 export const STORYCLAW_TOOL_NAMES = [
   ...WORKSPACE_TOOL_NAMES,
+  'bash',
+  'fetch_url',
   'spawn_subagent'
 ] as const
 
@@ -40,8 +42,8 @@ const MODE_CONFIG: Record<AgentMode, AgentModeConfig> = {
   craft: {
     mode: 'craft',
     // save_format_template 持久化学到的模板，仅 Craft 允许
-    allowedTools: [...READ_ONLY_TOOLS, 'write_screenplay', 'spawn_subagent', 'save_format_template'],
-    systemSuffix: '当前模式：Craft。可以读取资料并生成剧本改动，必须通过 write_screenplay 生成待审核 diff；可通过 spawn_subagent 调度各阶段专家子代理。'
+    allowedTools: [...READ_ONLY_TOOLS, 'bash', 'fetch_url', 'write_screenplay', 'spawn_subagent', 'save_format_template'],
+    systemSuffix: '当前模式：Craft。可以读取资料、访问公开网页、执行工作区终端命令并生成文件改动；剧本类改动优先通过 write_screenplay 生成待审核 diff；外部 Skill 如需浏览网页可用 fetch_url，如需 Python/Node/npx/脚本可用 bash 在当前工作区内执行；可通过 spawn_subagent 调度各阶段专家子代理。不要因为权限模式叫“默认权限”或需要用户确认就声称自己处于隔离沙箱；先尝试可用工具，失败时报告具体工具错误。'
   },
   plan: {
     mode: 'plan',

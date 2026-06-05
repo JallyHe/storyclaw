@@ -92,6 +92,11 @@ export interface ToolStep {
   target: string
   isError?: boolean
   thinking?: string  // full thinking content for 'thinking' steps
+  permission?: {
+    requestId: string
+    tool: string
+    description: string
+  }
 }
 
 export interface AssistantMessage {
@@ -224,6 +229,7 @@ export interface AgentModelOption {
   configured: boolean
   enabled: boolean
   isDefault: boolean
+  supportsTools: boolean
 }
 
 export interface AgentConnectionTestResult {

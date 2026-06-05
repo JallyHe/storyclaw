@@ -3,6 +3,7 @@ import { marked, Renderer } from 'marked'
 import type { Message as MessageType, ToolStep } from '@/types'
 import { Ic } from '@/components/icons'
 import { useSessionsStore } from '@/store'
+import { agentIpc } from '@/ipc/agent'
 import storyclawLogo from '@/assets/storyclaw-logo.png'
 
 // ── Markdown renderer ────────────────────────────────────────────────────────
@@ -101,7 +102,10 @@ const TOOL_ICO: Record<string, React.FC<any>> = {
   read_reference:   Ic.read,
   list_workspace:   Ic.list,
   write_screenplay: Ic.edit,
+  bash:             Ic.terminal,
+  fetch_url:        Ic.globe,
   file_written:     Ic.edit,
+  permission:       Ic.shield,
   thinking:         Ic.spark,
   search:           Ic.search,
 }
@@ -112,18 +116,29 @@ const TOOL_COLOR: Record<string, string> = {
   read_reference:   'var(--accent)',
   list_workspace:   'var(--text-2)',
   write_screenplay: 'var(--accent-ai)',
+  bash:             'var(--accent)',
+  fetch_url:        'var(--accent)',
   file_written:     'var(--accent-ai)',
+  permission:       'var(--accent)',
   thinking:         'var(--accent-ai)',
   search:           'var(--c-outline)',
 }
 
-function StepRow({ step }: { step: ToolStep }) {
+const PERMISSION_TOOL_LABELS: Record<string, string> = {
+  bash: '终端命令',
+  fetch_url: '网页访问',
+  write_screenplay: '文件写入'
+}
+
+function StepRow({ step, sessionId }: { step: ToolStep; sessionId?: string }) {
   const IcoComp = TOOL_ICO[step.kind] ?? Ic.read
   const color   = TOOL_COLOR[step.kind] ?? 'var(--text-2)'
   const pending = step.isError === undefined
   const isError = step.isError === true
   const isThinking = step.kind === 'thinking'
+  const resolvePermissionStep = useSessionsStore(s => s.resolvePermissionStep)
   const [showThinking, setShowThinking] = useState(false)
+  const [showPermissionDetail, setShowPermissionDetail] = useState(false)
   const thinkingRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -132,6 +147,59 @@ function StepRow({ step }: { step: ToolStep }) {
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [showThinking, step.thinking])
+
+  const respondPermission = (approved: boolean) => {
+    if (!step.permission || !sessionId || step.isError !== undefined) return
+    agentIpc.permissionRespond(step.permission.requestId, approved)
+    resolvePermissionStep(sessionId, step.permission.requestId, approved)
+  }
+
+  if (step.permission) {
+    const toolLabel = PERMISSION_TOOL_LABELS[step.permission.tool] ?? step.permission.tool
+    const targetSummary = step.target.length > 48 ? `...${step.target.slice(-46)}` : step.target
+    const showPermissionBody = pending || showPermissionDetail
+    return (
+      <div className={`step-row permission${isError ? ' err' : pending ? ' pend' : ' ok'}`}>
+        <span className="step-status">
+          {pending ? (
+            <span className="step-spin" />
+          ) : isError ? (
+            <Ic.x width={10} height={10} />
+          ) : (
+            <Ic.check width={10} height={10} />
+          )}
+        </span>
+        <span className="step-tool-ico" style={{ color }}>
+          <IcoComp width={13} height={13} />
+        </span>
+        <div className="step-perm-body">
+          <button
+            type="button"
+            className={`step-perm-head${pending ? ' locked' : ''}`}
+            onClick={() => { if (!pending) setShowPermissionDetail(open => !open) }}
+            title={pending ? '' : showPermissionDetail ? '收起详情' : '展开详情'}
+          >
+            <span className="step-lbl">{step.label}</span>
+            <span className="step-perm-pill">{toolLabel}</span>
+            {!pending && step.target && <span className="step-perm-summary">{targetSummary}</span>}
+            {!pending && <Ic.chevD width={10} height={10} className={`step-perm-chev${showPermissionDetail ? ' open' : ''}`} />}
+          </button>
+          {showPermissionBody && (
+            <>
+              <div className="step-perm-desc">{step.permission.description}</div>
+              {step.target && <div className="step-perm-target" title={step.target}>{step.target}</div>}
+            </>
+          )}
+          {pending && (
+            <div className="step-perm-actions">
+              <button className="step-perm-btn deny" onClick={event => { event.stopPropagation(); respondPermission(false) }}>拒绝</button>
+              <button className="step-perm-btn allow" onClick={event => { event.stopPropagation(); respondPermission(true) }}>允许</button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -189,7 +257,7 @@ function StepRow({ step }: { step: ToolStep }) {
 
 // ── Step list with toggle ────────────────────────────────────────────────────
 
-function StepList({ steps, busy }: { steps: ToolStep[]; busy: boolean }) {
+function StepList({ steps, busy, sessionId }: { steps: ToolStep[]; busy: boolean; sessionId?: string }) {
   const [open, setOpen] = useState(true)
   const doneCount  = steps.filter(s => s.isError !== undefined).length
   const errorCount = steps.filter(s => s.isError === true).length
@@ -223,7 +291,7 @@ function StepList({ steps, busy }: { steps: ToolStep[]; busy: boolean }) {
       {/* step rows */}
       {open && (
         <div className="step-rows">
-          {steps.map((s, i) => <StepRow key={i} step={s} />)}
+          {steps.map((s, i) => <StepRow key={i} step={s} sessionId={sessionId} />)}
         </div>
       )}
     </div>
@@ -296,7 +364,7 @@ export function Message({ m, sessionId, index }: {
       </div>
 
       {/* tool steps */}
-      {hasSteps && <StepList steps={m.steps} busy={toolsBusy} />}
+      {hasSteps && <StepList steps={m.steps} busy={toolsBusy} sessionId={sessionId} />}
 
       {/* reply or status */}
       {m.typing && !hasReply ? (

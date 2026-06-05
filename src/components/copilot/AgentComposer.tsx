@@ -55,7 +55,7 @@ const AGENT_MODES = [
 ]
 
 const AGENT_PERMISSIONS = [
-  { id: 'default', name: '默认权限', sub: '安全沙箱', icon: Ic.shield, desc: 'Agent 执行命令前需逐次授权。' },
+  { id: 'default', name: '默认权限', sub: '逐次确认', icon: Ic.shield, desc: 'Agent 执行命令或访问网页前需逐次授权。' },
   { id: 'full', name: '完全放开', sub: '自动执行', icon: Ic.terminal, desc: 'Agent 可自动执行所有操作，请谨慎使用。' }
 ]
 
@@ -250,6 +250,8 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   const curPerm = AGENT_PERMISSIONS.find(item => item.id === permission) ?? AGENT_PERMISSIONS[0]
   const hasSelectedModel = Boolean(curModelOption && curModel)
   const isConfigured = Boolean(curModelOption?.configured)
+  const modelSupportsTools = curModelOption?.supportsTools !== false
+  const canSendWithMode = mode !== 'craft' || modelSupportsTools
   const modelWarning = getConfigMessage(curModelOption)
   const currentDocument = useMemo(() => {
     if (!includeCurrentDocumentContext || !activeFile) return null
@@ -519,7 +521,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   }
 
   const sendPromptText = useCallback(async (text: string, visibleText = text, clearEditor = false) => {
-    if (!text || busy || !isConfigured || !hasSelectedModel) return
+    if (!text || busy || !isConfigured || !hasSelectedModel || !canSendWithMode) return
     if (clearEditor && edRef.current) {
       edRef.current.innerHTML = ''
       setHasContent(false)
@@ -534,7 +536,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
       ? appendCurrentDocumentContext(strippedText, { activeFile, workspaceRoot: root })
       : strippedText
     await agentIpc.send(activeId, prompt, mode, permission, model || undefined)
-  }, [activeFile, activeId, addMessage, busy, hasSelectedModel, includeCurrentDocumentContext, isConfigured, mode, model, permission, root])
+  }, [activeFile, activeId, addMessage, busy, canSendWithMode, hasSelectedModel, includeCurrentDocumentContext, isConfigured, mode, model, permission, root])
 
   const submit = useCallback(async () => {
     await sendPromptText(serialize(), undefined, true)
@@ -543,7 +545,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
   useEffect(() => {
     if (!queuedSelection) return
     if (queuedSelection.autoSubmit) {
-      if (busy || !isConfigured || !hasSelectedModel) return
+      if (busy || !isConfigured || !hasSelectedModel || !canSendWithMode) return
       const selection = consumeQueuedSelection()
       if (!selection) return
       const promptText = selection.promptText?.trim() || '请改写这个选区'
@@ -555,7 +557,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
     if (!selection) return
     insertSelectionReference(selection.ref, selection.promptText)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, consumeQueuedSelection, hasSelectedModel, isConfigured, queuedSelection, sendPromptText])
+  }, [busy, canSendWithMode, consumeQueuedSelection, hasSelectedModel, isConfigured, queuedSelection, sendPromptText])
 
   const stop = useCallback(async () => {
     await agentIpc.stop(activeId)
@@ -1009,9 +1011,9 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
           : (
             <button
               className="ac-send"
-              disabled={!hasContent || !isConfigured || !hasSelectedModel}
+              disabled={!hasContent || !isConfigured || !hasSelectedModel || !canSendWithMode}
               onClick={() => void submit()}
-              title={!hasSelectedModel ? '请先添加模型' : !isConfigured ? '请先设置 API Key' : '发送 (Enter)'}
+              title={!hasSelectedModel ? '请先添加模型' : !isConfigured ? '请先设置 API Key' : !canSendWithMode ? '当前模型不支持工具调用，Craft 模式无法触发授权' : '发送 (Enter)'}
             >
               <Ic.send width={15} height={15} />
             </button>
@@ -1080,6 +1082,7 @@ export const AgentComposer = forwardRef<AgentComposerHandle, Props>(function Age
                   {item.label}
                   {item.id === agentConfig?.activeModelId && <span className="ac-tag">当前</span>}
                   {!item.configured && <span className="ac-tag" style={{ color: 'var(--diff-del-fg)', background: 'color-mix(in srgb, var(--diff-del-fg) 15%, transparent)' }}>需要 Key</span>}
+                  {!item.supportsTools && <span className="ac-tag" style={{ color: 'var(--diff-del-fg)', background: 'color-mix(in srgb, var(--diff-del-fg) 15%, transparent)' }}>无工具</span>}
                 </div>
                 <div className="ac-opt-desc ac-path">{getProviderLabel(item.provider)} / {item.model}</div>
               </div>

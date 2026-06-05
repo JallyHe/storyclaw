@@ -80,7 +80,8 @@ export async function listConfiguredAgentModels(_workspaceRoot?: string): Promis
     model: model.model,
     configured: Boolean(model.apiKey || model.providerId === 'ollama'),
     enabled: model.enabled,
-    isDefault: model.id === config.activeModelId
+    isDefault: model.id === config.activeModelId,
+    supportsTools: model.supportsTools !== false
   }))
 }
 

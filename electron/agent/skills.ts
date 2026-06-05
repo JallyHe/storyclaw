@@ -1,4 +1,5 @@
 import fs from 'fs/promises'
+import os from 'os'
 import path from 'path'
 import { app } from 'electron'
 import { Type } from '@sinclair/typebox'
@@ -109,9 +110,19 @@ export function getSkillsDir(): string {
   return path.join(resourceBaseDir(), 'skills')
 }
 
+/** 当前用户的全局外部 Skill 目录。 */
+export function getUserSkillsDir(): string {
+  return path.join(os.homedir(), '.storyclaw', 'skills')
+}
+
 /** 当前项目的默认外部 Skill 目录。 */
 export function getWorkspaceSkillsDir(workspaceRoot: string): string {
   return path.join(workspaceRoot, '.storyclaw', 'skills')
+}
+
+/** 主会话 Skill 加载顺序：内置 < 用户全局 < 当前项目。后者可覆盖同名 Skill。 */
+export function getMainSessionSkillDirs(workspaceRoot: string): string[] {
+  return [getSkillsDir(), getUserSkillsDir(), getWorkspaceSkillsDir(workspaceRoot)]
 }
 
 /** 阶段专家定义目录。 */
@@ -171,17 +182,17 @@ async function readSkillResourcesFromDir(skillsDir: string): Promise<AgentResour
   )
 }
 
-/** 列出内置与项目外部的专家/创作技能，供 UI 选择器展示。 */
+/** 列出内置、用户全局与项目外部的专家/创作技能，供 UI 选择器展示。 */
 export async function listAgentResources(workspaceRoot?: string | null): Promise<AgentResources> {
   const agents = await Promise.all(
     AGENT_NAMES.map(name => readResource(path.join(getAgentsDir(), `${name}.md`), name))
   )
   const skillsByName = new Map<string, AgentResource>()
-  for (const skill of await readSkillResourcesFromDir(getSkillsDir())) {
-    skillsByName.set(skill.name, skill)
-  }
-  if (workspaceRoot) {
-    for (const skill of await readSkillResourcesFromDir(getWorkspaceSkillsDir(workspaceRoot))) {
+  const skillDirs = workspaceRoot
+    ? getMainSessionSkillDirs(workspaceRoot)
+    : [getSkillsDir(), getUserSkillsDir()]
+  for (const skillsDir of skillDirs) {
+    for (const skill of await readSkillResourcesFromDir(skillsDir)) {
       skillsByName.set(skill.name, skill)
     }
   }

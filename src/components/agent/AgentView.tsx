@@ -3,7 +3,6 @@ import { useAgentEvents } from '@/hooks/useAgentEvents'
 import { SessionList } from './SessionList'
 import { AgentMain } from './AgentMain'
 import { ChangesPanel } from './ChangesPanel'
-import { PermissionDialog } from './PermissionDialog'
 import { ResizeHandle } from '@/components/shell/ResizeHandle'
 
 export function AgentView() {
@@ -24,7 +23,6 @@ export function AgentView() {
           <ChangesPanel width={changesWidth} />
         </>
       )}
-      <PermissionDialog />
     </div>
   )
 }

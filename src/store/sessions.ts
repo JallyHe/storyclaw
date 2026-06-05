@@ -10,6 +10,8 @@ interface SessionsState {
   addMessage: (msg: Message) => void
   appendDelta: (sessionId: string, delta: string) => void
   addToolStep: (sessionId: string, tool: string, label: string, target: string) => void
+  addPermissionStep: (sessionId: string, request: { requestId: string; tool: string; target: string; description: string }) => void
+  resolvePermissionStep: (sessionId: string, requestId: string, approved: boolean) => void
   completeToolStep: (sessionId: string, tool: string, isError: boolean) => void
   appendThinking: (sessionId: string, delta: string) => void
   finalizeReply: (sessionId: string) => void
@@ -74,6 +76,41 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     })
   })),
 
+  addPermissionStep: (sessionId, request) => set(s => ({
+    sessions: s.sessions.map(sess => {
+      if (sess.id !== sessionId) return sess
+      const msgs = [...sess.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return sess
+      const step = {
+        kind: 'permission',
+        label: '等待授权',
+        target: request.target,
+        permission: {
+          requestId: request.requestId,
+          tool: request.tool,
+          description: request.description
+        }
+      }
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps: [...last.steps, step] }] })
+    })
+  })),
+
+  resolvePermissionStep: (sessionId, requestId, approved) => set(s => ({
+    sessions: s.sessions.map(sess => {
+      if (sess.id !== sessionId) return sess
+      const msgs = [...sess.messages]
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant' || !last.steps.length) return sess
+      const steps = last.steps.map(step =>
+        step.permission?.requestId === requestId
+          ? { ...step, label: approved ? '已授权' : '已拒绝授权', isError: !approved }
+          : step
+      )
+      return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] })
+    })
+  })),
+
   completeToolStep: (sessionId, _tool, isError) => set(s => ({
     sessions: s.sessions.map(sess => {
       if (sess.id !== sessionId) return sess
@@ -81,7 +118,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const last = msgs[msgs.length - 1]
       if (!last || last.role !== 'assistant' || !last.steps.length) return sess
       const steps = [...last.steps]
-      steps[steps.length - 1] = { ...steps[steps.length - 1], isError }
+      const idx = [...steps].reverse().findIndex(step => step.kind === _tool && step.isError === undefined)
+      const targetIndex = idx >= 0 ? steps.length - 1 - idx : steps.length - 1
+      steps[targetIndex] = { ...steps[targetIndex], isError }
       return touchSession({ ...sess, messages: [...msgs.slice(0, -1), { ...last, steps }] })
     })
   })),

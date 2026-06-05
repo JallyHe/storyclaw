@@ -1,3 +1,5 @@
+import os from 'os'
+import path from 'path'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -8,7 +10,7 @@ vi.mock('electron', () => ({
 }))
 
 describe('agent resource frontmatter parsing', async () => {
-  const { parseFrontmatterField } = await import('../electron/agent/skills')
+  const { getMainSessionSkillDirs, getUserSkillsDir, parseFrontmatterField } = await import('../electron/agent/skills')
 
   it('parses Chinese title and description with Windows CRLF line endings', () => {
     const md = [
@@ -23,5 +25,14 @@ describe('agent resource frontmatter parsing', async () => {
 
     expect(parseFrontmatterField(md, 'title')).toBe('人物语态区分')
     expect(parseFrontmatterField(md, 'description')).toBe('当让不同角色的台词彼此可辨时使用。')
+  })
+
+  it('includes the user global skills directory before workspace skills', () => {
+    const workspaceRoot = path.join('D:', 'workspace', 'story')
+    const dirs = getMainSessionSkillDirs(workspaceRoot)
+
+    expect(getUserSkillsDir()).toBe(path.join(os.homedir(), '.storyclaw', 'skills'))
+    expect(dirs[1]).toBe(getUserSkillsDir())
+    expect(dirs[2]).toBe(path.join(workspaceRoot, '.storyclaw', 'skills'))
   })
 })

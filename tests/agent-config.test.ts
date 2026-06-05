@@ -142,7 +142,39 @@ describe('agent model config', () => {
     expect(options.map(option => option.id)).toEqual(['deepseek-chat', 'custom-qwen'])
     expect(options.find(option => option.id === 'custom-qwen')).toMatchObject({
       provider: 'custom-openai',
-      configured: true
+      configured: true,
+      supportsTools: true
+    })
+  })
+
+  it('surfaces models that cannot use tools', async () => {
+    const root = await makeWorkspace()
+
+    await saveAgentConfig(root, {
+      version: 1,
+      activeModelId: 'plain-chat',
+      models: [
+        {
+          id: 'plain-chat',
+          providerId: 'custom-openai',
+          displayName: 'Plain Chat',
+          model: 'plain-chat',
+          api: 'openai-completions',
+          baseUrl: 'https://example.test/v1',
+          apiKey: 'sk-custom',
+          enabled: true,
+          reasoning: false,
+          defaultMode: 'craft',
+          supportsTools: false
+        }
+      ]
+    })
+
+    const options = await listConfiguredAgentModels(root)
+
+    expect(options[0]).toMatchObject({
+      id: 'plain-chat',
+      supportsTools: false
     })
   })
 })

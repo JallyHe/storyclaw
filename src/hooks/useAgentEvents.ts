@@ -23,7 +23,7 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 export function useAgentEvents() {
-  const { appendDelta, addToolStep, completeToolStep, appendThinking, finalizeReply } = useSessionsStore()
+  const { appendDelta, addToolStep, addPermissionStep, completeToolStep, appendThinking, finalizeReply } = useSessionsStore()
   const { addChange } = useChangesStore()
   const invalidateFile = useWorkspaceStore(s => s.invalidateFile)
   // Keep a ref to activeId so the event handler can fall back to it if an event
@@ -72,7 +72,7 @@ export function useAgentEvents() {
           break
 
         case 'permission_request':
-          window.dispatchEvent(new CustomEvent('agent:permission-request', { detail: event }))
+          addPermissionStep(sid, event)
           break
 
         case 'queue_update':
@@ -91,5 +91,5 @@ export function useAgentEvents() {
       }
     })
     return unsub
-  }, [appendDelta, addToolStep, completeToolStep, appendThinking, finalizeReply, addChange, invalidateFile])
+  }, [appendDelta, addToolStep, addPermissionStep, completeToolStep, appendThinking, finalizeReply, addChange, invalidateFile])
 }
