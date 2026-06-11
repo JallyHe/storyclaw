@@ -111,7 +111,10 @@ export interface Session {
   id: string
   title: string
   group: string
+  /** 兼容旧数据的展示文本（如 '刚刚'）；新逻辑优先用 ts 格式化。 */
   time: string
+  /** 最后活动时间（epoch ms），用于会话列表的日期格式化与排序。 */
+  ts?: number
   messages: Message[]
   archived?: boolean
   titleEdited?: boolean

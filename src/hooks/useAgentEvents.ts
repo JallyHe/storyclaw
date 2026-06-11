@@ -5,16 +5,18 @@ import type { AgentEvent } from '@/types'
 
 /** 专家子代理 → 中文展示名。 */
 const STAGE_LABELS: Record<string, string> = {
-  'concept-planner': '选题策划',
+  'core-strategist': '核心策略',
   'market-analyst': '市场评估',
   'ip-developer': 'IP衍生',
   'research-analyst': '资料研究',
   'worldbuilder': '世界观设定',
   'character-designer': '人物设定',
-  'story-architect': '故事架构',
-  'episode-outliner': '分集大纲',
-  'scene-writer': '场景编剧',
-  'dialogue-polisher': '对白润色',
+  'story-restructurer': '故事框架',
+  'plot-designer': '情节设计',
+  'scene-planner': '分场规划',
+  'scene-to-script': '剧本创作',
+  'dialogue-optimizer': '对白优化',
+  'plot-to-screenplay': '叙事美学',
   'chief-editor': '责编',
   'logic-checker': '逻辑校对',
   'drama-reviewer': '戏剧冲突',

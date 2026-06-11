@@ -5,6 +5,7 @@ import { Message } from './Message'
 import { AgentComposer, type AgentComposerHandle } from './AgentComposer'
 import { PermissionDialog } from '@/components/agent/PermissionDialog'
 import { Ic } from '@/components/icons'
+import { formatSessionTime } from '@/lib/datetime'
 
 const QUICK_ACTIONS = [
   { id: 'continue',    label: '续写本场',    icon: Ic.feather, prompt: '请续写当前剧本场景，保持人物语气和既有情节连贯。' },
@@ -77,9 +78,7 @@ export function Copilot({ width }: Props) {
               <div className="cp-session-empty">暂无会话</div>
             ) : (
               visible.map(item => {
-                const additions = item.messages.reduce((count, message) =>
-                  count + (message.role === 'assistant' ? message.steps.length : 0), 0)
-                const deletions = item.messages.filter(message => message.role === 'user').length
+                const msgCount = item.messages.length
                 return (
                   <button
                     key={item.id}
@@ -91,9 +90,8 @@ export function Copilot({ width }: Props) {
                     <span className="cp-session-row-main">
                       <span className="cp-session-row-title">{item.title}</span>
                       <span className="cp-session-row-meta">
-                        {additions > 0 && <b className="add">+{additions}</b>}
-                        {deletions > 0 && <b className="del">-{deletions}</b>}
-                        <span>{item.time}</span>
+                        {msgCount > 0 && <span className="cp-session-row-count">{msgCount} 条</span>}
+                        <span>{formatSessionTime(item.ts, item.time)}</span>
                       </span>
                     </span>
                   </button>

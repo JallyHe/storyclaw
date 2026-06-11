@@ -1,5 +1,5 @@
 {
-  "concept-planner": [
+  "core-strategist": [
     "story-architecture-analyzer",
     "genre-classification",
     "target-audience",
@@ -41,8 +41,7 @@
     "character-relationship-map",
     "voice-differentiation"
   ],
-  "story-architect": [
-    "duration-rules",
+  "story-restructurer": [
     "story-situation",
     "story-arc",
     "situation-is-king",
@@ -52,10 +51,19 @@
     "situation-plot-conversion",
     "pressure-escalation",
     "hole-before-fill",
-    "reverse-thinking"
+    "reverse-thinking",
+    "character-situation",
+    "character-reinforcement",
+    "hard-choices",
+    "blame-shift-credit",
+    "information-positioning",
+    "avatar-character",
+    "companion-character",
+    "reward-character",
+    "plot-trigger-character",
+    "story-restructurer"
   ],
-  "episode-outliner": [
-    "duration-rules",
+  "plot-designer": [
     "cyclical-plot",
     "situation-building-plot",
     "terminal-plot",
@@ -65,20 +73,22 @@
     "reverse-thinking",
     "pressure-escalation"
   ],
-  "scene-writer": [
-    "duration-rules",
+  "scene-planner": [
+    "hole-before-fill",
     "situation-is-king",
     "situation-plot-conversion",
     "pressure-escalation",
-    "hole-before-fill",
+    "scene-optimizer"
+  ],
+  "scene-to-script": [
     "character-situation",
     "character-reinforcement",
     "hard-choices",
     "information-positioning",
-    "blame-shift-credit",
-    "voice-differentiation"
+    "voice-differentiation",
+    "blame-shift-credit"
   ],
-  "dialogue-polisher": [
+  "dialogue-optimizer": [
     "voice-differentiation",
     "subtext-first",
     "meta-commentary",
@@ -91,6 +101,15 @@
     "action-catalyzing",
     "rhythm-control",
     "trim-redundancy"
+  ],
+  "plot-to-screenplay": [
+    "situation-is-king",
+    "pressure-escalation",
+    "hole-before-fill",
+    "amplify-interesting",
+    "rhythm-control",
+    "trim-redundancy",
+    "plot-to-screenplay"
   ],
   "chief-editor": [
     "editorial-standard",

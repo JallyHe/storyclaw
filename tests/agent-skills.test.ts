@@ -9,9 +9,9 @@ const SKILLS = resolve(AGENT_DIR, 'skills')
 const AGENTS = resolve(AGENT_DIR, 'agents')
 
 const DISPATCHABLE = [
-  'concept-planner', 'market-analyst', 'ip-developer',
+  'core-strategist', 'market-analyst', 'ip-developer',
   'research-analyst', 'worldbuilder', 'character-designer',
-  'story-architect', 'episode-outliner', 'scene-writer', 'dialogue-polisher',
+  'story-restructurer', 'plot-designer', 'scene-planner', 'scene-to-script', 'dialogue-optimizer', 'plot-to-screenplay',
   'chief-editor', 'logic-checker', 'drama-reviewer', 'compliance-reviewer', 'feasibility-analyst'
 ]
 

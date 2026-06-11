@@ -26,7 +26,7 @@ interface SessionsState {
 }
 
 const INITIAL_SESSION: Session = {
-  id: 's_new', title: '新会话', group: '进行中', time: '刚刚', messages: []
+  id: 's_new', title: '新会话', group: '进行中', time: '刚刚', ts: Date.now(), messages: []
 }
 
 function createTitleFromMessage(text: string): string {
@@ -52,7 +52,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       const title = msg.role === 'user' && shouldAutoName(sess)
         ? createTitleFromMessage(msg.text)
         : sess.title
-      return { ...sess, title, messages: [...sess.messages, msg] }
+      return { ...sess, title, ts: Date.now(), messages: [...sess.messages, msg] }
     })
   })),
 
@@ -130,7 +130,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       return
     }
     const id = 's_' + Date.now()
-    const session: Session = { id, title: '新会话', group: '进行中', time: '刚刚', messages: [] }
+    const session: Session = { id, title: '新会话', group: '进行中', time: '刚刚', ts: Date.now(), messages: [] }
     set(s => ({
       sessions: [session, ...s.sessions.map(sess => sess.group === '进行中' ? { ...sess, group: '今天' } : sess)],
       activeId: id,
@@ -190,7 +190,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       if (firstAgent) {
         activeId = firstAgent.id
       } else {
-        const blank: Session = { id: 's_new', title: '新会话', group: '进行中', time: '刚刚', messages: [] }
+        const blank: Session = { id: 's_new', title: '新会话', group: '进行中', time: '刚刚', ts: Date.now(), messages: [] }
         sessions = [blank, ...sessions]
         activeId = blank.id
       }
@@ -223,7 +223,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       return {
         sessions: s.sessions.map(sess =>
           sess.id === sessionId
-            ? { ...sess, time: '刚刚', peerName: peer, messages: appendInto(sess.messages) }
+            ? { ...sess, time: '刚刚', ts: event.ts ?? Date.now(), peerName: peer, messages: appendInto(sess.messages) }
             : sess
         )
       }
@@ -238,6 +238,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       titleEdited: true,
       group: '机器人',
       time: '刚刚',
+      ts: event.ts ?? Date.now(),
       messages: appendInto([])
     }
     // 新机器人会话置顶，但不抢占当前激活会话

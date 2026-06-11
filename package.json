@@ -1,11 +1,13 @@
 {
   "name": "storyclaw",
-  "version": "0.1.4",
+  "version": "0.1.9",
   "description": "AI-powered screenplay editor",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "encrypt-resources": "node electron/agent/encrypt-resources.mjs",
+    "predist": "node electron/agent/encrypt-resources.mjs",
     "dist": "npm run build && electron-builder",
     "preview": "electron-vite preview",
     "test": "vitest run",
@@ -29,12 +31,12 @@
         "to": "assets/storyclaw-logo.png"
       },
       {
-        "from": "electron/agent/skills",
-        "to": "skills"
+        "from": "electron/agent/skills.enc",
+        "to": "skills.enc"
       },
       {
-        "from": "electron/agent/agents",
-        "to": "agents"
+        "from": "electron/agent/agents.enc",
+        "to": "agents.enc"
       },
       {
         "from": "electron/agent/agent-skills.json",

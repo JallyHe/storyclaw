@@ -7,3 +7,7 @@ release/
 .storyclaw/
 .worktrees/
 release*/
+
+# 构建期生成的加密资源产物（由 npm run encrypt-resources / predist 生成）
+electron/agent/skills.enc/
+electron/agent/agents.enc/
