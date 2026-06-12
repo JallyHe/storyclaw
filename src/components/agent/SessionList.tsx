@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react'
 import { useSessionsStore } from '@/store'
 import { Ic } from '@/components/icons'
+import { formatSessionTime } from '@/lib/datetime'
 import type { Session } from '@/types'
-import { formatSessionRelativeTime } from '@/store/sessionMetadata'
 
 interface Props { width: number }
 
@@ -11,7 +11,7 @@ function platformLabel(platform?: string): string {
   return platform ? (PLATFORM_LABELS[platform] ?? platform) : '机器人'
 }
 
-function SessionRow({ session, active, running, editing, editValue, onEditValue, onStartEdit, onCommitEdit, onCancelEdit, onPick, onContext }: {
+function SessionRow({ session, active, running, editing, editValue, onEditValue, onStartEdit, onCommitEdit, onCancelEdit, onPick, onContext, onArchive }: {
   session: Session
   active: boolean
   running: boolean
@@ -23,6 +23,7 @@ function SessionRow({ session, active, running, editing, editValue, onEditValue,
   onCancelEdit: () => void
   onPick: () => void
   onContext: (event: MouseEvent, session: Session) => void
+  onArchive: (session: Session) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -72,8 +73,23 @@ function SessionRow({ session, active, running, editing, editValue, onEditValue,
             {session.title}
           </div>
         )}
-        <div className="session-meta">{formatSessionRelativeTime(session)}</div>
+        <div className="session-meta">
+          {formatSessionTime(session.updatedAt ?? session.time ?? session.createdAt, session.time)}
+        </div>
       </div>
+      {!editing && (
+        <button
+          className="session-del"
+          title="归档会话"
+          aria-label="归档会话"
+          onClick={event => {
+            event.stopPropagation()
+            onArchive(session)
+          }}
+        >
+          <Ic.trash width={13} height={13} />
+        </button>
+      )}
     </div>
   )
 }
@@ -162,6 +178,7 @@ export function SessionList({ width }: Props) {
                 onCancelEdit={cancelEdit}
                 onPick={() => setActive(s.id)}
                 onContext={openContextMenu}
+                onArchive={archiveFromMenu}
               />
             ))}
           </div>

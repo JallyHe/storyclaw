@@ -1,7 +1,10 @@
-import fs from 'fs/promises'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import os from 'os'
 import path from 'path'
 import { app } from 'electron'
+// 纯 JS 共享模块（构建脚本与主进程共用）。
+import { decryptBuffer, ENC_EXT } from './resource-crypto.mjs'
 import { Type } from '@sinclair/typebox'
 import {
   AuthStorage,
@@ -30,11 +33,11 @@ import type { AgentResource, AgentResources } from '../../src/types'
 /** 内置专家子代理名（与 agents/<name>.md 一一对应），可被主 Agent 按需派发。 */
 export const AGENT_NAMES = [
   // 创意
-  'concept-planner', 'market-analyst', 'ip-developer',
+  'core-strategist', 'market-analyst', 'ip-developer',
   // 设定
   'research-analyst', 'worldbuilder', 'character-designer',
-  // 写作
-  'story-architect', 'episode-outliner', 'scene-writer', 'dialogue-polisher',
+  // 写作（五阶段管线专家）
+  'story-restructurer', 'plot-designer', 'scene-planner', 'scene-to-script', 'dialogue-optimizer', 'plot-to-screenplay',
   // 审核
   'chief-editor', 'logic-checker', 'drama-reviewer', 'compliance-reviewer', 'feasibility-analyst'
 ] as const
@@ -47,9 +50,9 @@ export const DISPATCHABLE_AGENT_NAMES: readonly AgentName[] = AGENT_NAMES
 // ── 质检：Agent 分类 ──────────────────────────────────────────────────────────
 /** 创意/设定/写作类专家——产出内容，需经过质检。 */
 const CREATIVE_AGENTS: readonly AgentName[] = [
-  'concept-planner', 'market-analyst', 'ip-developer',
+  'core-strategist', 'market-analyst', 'ip-developer',
   'research-analyst', 'worldbuilder', 'character-designer',
-  'story-architect', 'episode-outliner', 'scene-writer', 'dialogue-polisher'
+  'story-restructurer', 'plot-designer', 'scene-planner', 'scene-to-script', 'dialogue-optimizer', 'plot-to-screenplay'
 ]
 
 /** 审核类专家——自身就是质检环节，跳过二次质检。 */
@@ -73,14 +76,16 @@ interface QAResult {
 const EXPECTED_FORMAT_MARKERS: Partial<Record<AgentName, string[]>> = {
   'character-designer': ['name', 'role', 'traits'],        // .chr JSON 关键字段
   'worldbuilder': ['title', 'sections'],                    // .wld JSON 关键字段
-  'story-architect': ['#', '##'],                           // Markdown 大纲
-  'episode-outliner': ['#', '##'],                          // Markdown 大纲
-  'scene-writer': ['@episode', '@title', '@status'],        // .ep 剧本标记
-  'dialogue-polisher': ['@episode'],                        // .ep 剧本标记
-  'concept-planner': ['#'],                                 // Markdown
+  'core-strategist': ['#'],                                 // Markdown 文档
   'market-analyst': ['#'],                                  // Markdown
   'ip-developer': ['#'],                                    // Markdown
   'research-analyst': ['#'],                                // Markdown
+  'story-restructurer': ['#', '##'],                        // Markdown 架构文档
+  'plot-designer': ['#', '##'],                             // Markdown Synopsis
+  'scene-planner': ['【场景设定】', '【功能分析】'],          // 分场规划文档
+  'scene-to-script': ['【场景', '人物表：', '△'],            // 剧本初稿
+  'dialogue-optimizer': ['△', '人物', '对白'],              // 对白优化后的剧本
+  'plot-to-screenplay': ['△', '人物', '对白'],              // 终稿剧本
 }
 
 /** 错误输出标记（出现则判定不合格） */
@@ -94,14 +99,48 @@ const ERROR_MARKERS = [
   '不符合相关规定',
 ]
 
+// ── 打包态：加密资源 → 临时目录解密（首次访问时同步执行）──────────────────────
+// 打包产物里只有 skills.enc / agents.enc（密文）。运行期把它们解密到一个随机
+// 命名的临时目录，并在退出时擦除。仅为混淆（密钥随应用分发），详见 resource-crypto.mjs。
+let decryptedDir: string | null = null
+
+/** 递归解密 srcDir(.enc 树) → dstDir（去掉 .enc 后缀，还原目录结构）。 */
+function decryptTree(srcDir: string, dstDir: string): void {
+  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
+    const src = path.join(srcDir, entry.name)
+    if (entry.isDirectory()) {
+      decryptTree(src, path.join(dstDir, entry.name))
+    } else if (entry.isFile() && entry.name.endsWith(ENC_EXT)) {
+      mkdirSync(dstDir, { recursive: true })
+      const plain = decryptBuffer(readFileSync(src))
+      writeFileSync(path.join(dstDir, entry.name.slice(0, -ENC_EXT.length)), plain)
+    }
+  }
+}
+
+function unlockPackagedResources(): string {
+  if (decryptedDir) return decryptedDir
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'storyclaw-res-'))
+  decryptTree(path.join(process.resourcesPath, 'skills.enc'), path.join(dir, 'skills'))
+  decryptTree(path.join(process.resourcesPath, 'agents.enc'), path.join(dir, 'agents'))
+  // agent-skills.json 为明文映射（非提示词），随包分发，直接复制进来保持目录布局一致。
+  const mapSrc = path.join(process.resourcesPath, 'agent-skills.json')
+  if (existsSync(mapSrc)) copyFileSync(mapSrc, path.join(dir, 'agent-skills.json'))
+  const cleanup = () => { try { rmSync(dir, { recursive: true, force: true }) } catch { /* 忽略 */ } }
+  app.on('will-quit', cleanup)
+  process.on('exit', cleanup)
+  decryptedDir = dir
+  return dir
+}
+
 /**
  * 内置资源所在的基准目录。
- * - 开发态：app.getAppPath() 指向项目根，资源在 electron/agent 下。
- * - 打包态：通过 electron-builder extraResources 复制到 resources/ 下。
+ * - 开发态：app.getAppPath() 指向项目根，资源（明文）在 electron/agent 下。
+ * - 打包态：skills.enc/agents.enc 解密到随机临时目录，退出时擦除。
  */
 function resourceBaseDir(): string {
   return app.isPackaged
-    ? process.resourcesPath
+    ? unlockPackagedResources()
     : path.join(app.getAppPath(), 'electron', 'agent')
 }
 
@@ -437,9 +476,9 @@ export const spawnSubagent = defineTool({
   name: 'spawn_subagent',
   label: '派发专家子代理',
   description: `把某个剧本创作专家拉起来干活，并返回它的完整产出。每个专家只带该领域的 Skill，上下文聚焦。按需调用，无强制顺序：
-【创意】concept-planner 选题策划 / market-analyst 市场评估 / ip-developer IP衍生
+【创意】core-strategist 核心策略 / market-analyst 市场评估 / ip-developer IP衍生
 【设定】research-analyst 资料研究 / worldbuilder 世界观设定 / character-designer 人物设定
-【写作】story-architect 故事架构 / episode-outliner 分集大纲 / scene-writer 场景编剧 / dialogue-polisher 对白润色
+【写作】story-restructurer 故事框架 / plot-designer 情节设计 / scene-planner 分场规划 / scene-to-script 剧本创作 / dialogue-optimizer 对白优化 / plot-to-screenplay 叙事美学
 【审核】chief-editor 责编 / logic-checker 逻辑校对 / drama-reviewer 戏剧冲突 / compliance-reviewer 合规风控 / feasibility-analyst 制片可行性
 重要：子代理是隔离会话、不记得本对话任何内容。task 里必须自带它干活所需的全部上下文——尤其是前序产出与「角色创作约束卡」。创意/设定/写作类子代理的产出会自动经过程序化质检，不合格时会自动重试修正。`,
   parameters: Type.Object({

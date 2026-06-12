@@ -10,6 +10,11 @@
 // 作为可用骨架，后续可由领域专家继续补强深度。
 //
 // 运行：node electron/agent/generate-skills.mjs
+//
+// 注意：2026-06 起部分资源事实源已改为「手工提交的 .md」（五阶段管线写作专家 +
+// 领域深度技能）。本生成器通过 COMMITTED_SKILLS / RETIRED_AGENTS 跳过集**不再覆盖
+// 它们**，只继续拥有非写作专属技能 + 10 个非写作专家，重跑安全。详见文件末尾跳过集
+// 与 docs/superpowers/specs/2026-06-11-screenplay-pipeline-integration-design.md。
 // ─────────────────────────────────────────────────────────────────────────────
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1025,8 +1030,29 @@ function agentMarkdown(a) {
 fs.mkdirSync(SKILLS_DIR, { recursive: true })
 fs.mkdirSync(AGENTS_DIR, { recursive: true })
 
+// ── 事实源例外 ────────────────────────────────────────────────────────────────
+// 以下资源的事实源已改为「手工提交的 .md」（领域专家深度版 + 五阶段管线专家），
+// 生成器不再覆盖它们；下面的 SKILLS/AGENTS 骨架仅作回退参考。详见
+// docs/superpowers/specs/2026-06-11-screenplay-pipeline-integration-design.md。
+const COMMITTED_SKILLS = new Set([
+  'story-situation', 'story-arc', 'cyclical-plot', 'terminal-plot', 'situation-building-plot',
+  'situation-plot-conversion', 'situation-is-king', 'pressure-escalation', 'hole-before-fill',
+  'blame-shift-credit', 'reverse-thinking', 'amplify-interesting', 'character-situation',
+  'character-reinforcement', 'hard-choices', 'information-positioning', 'avatar-character',
+  'companion-character', 'reward-character', 'plot-trigger-character', 'story-architecture-analyzer',
+  'genre-classification', 'target-audience', 'audience-insight', 'social-insight',
+  'voice-differentiation', 'subtext-first', 'meta-commentary', 'conflict-is-drama',
+  'information-release', 'qa-role-reversal', 'callback-echo', 'face-slap', 'tension-break',
+  'action-catalyzing', 'rhythm-control', 'trim-redundancy',
+])
+// 已退役的旧写作骨架专家（被五阶段管线专家取代），生成器不再产出其 .md。
+const RETIRED_AGENTS = new Set([
+  'concept-planner', 'story-architect', 'episode-outliner', 'scene-writer', 'dialogue-polisher',
+])
+
 let skillCount = 0
 for (const s of SKILLS) {
+  if (COMMITTED_SKILLS.has(s.name)) continue
   const dir = path.join(SKILLS_DIR, s.name)
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'SKILL.md'), skillMarkdown(s), 'utf8')
@@ -1035,6 +1061,7 @@ for (const s of SKILLS) {
 
 let agentCount = 0
 for (const a of AGENTS) {
+  if (RETIRED_AGENTS.has(a.name)) continue
   fs.writeFileSync(path.join(AGENTS_DIR, `${a.name}.md`), agentMarkdown(a), 'utf8')
   agentCount++
 }
@@ -1042,18 +1069,20 @@ for (const a of AGENTS) {
 // 同步导出 专家→skill 映射，供 skills.ts 复用（单一事实来源）
 const AGENT_SKILLS = {
   // 创意类
-  'concept-planner': ['story-architecture-analyzer', 'genre-classification', 'target-audience', 'audience-insight', 'social-insight'],
+  'core-strategist': ['story-architecture-analyzer', 'genre-classification', 'target-audience', 'audience-insight', 'social-insight'],
   'market-analyst': ['target-audience', 'audience-insight', 'social-insight', 'genre-classification', 'competitive-analysis', 'commercial-hook'],
   'ip-developer': ['ip-extensibility', 'franchise-design', 'audience-insight'],
   // 设定类
   'research-analyst': ['story-architecture-analyzer', 'source-verification', 'reference-synthesis'],
   'worldbuilder': ['setting-rules', 'worldview-consistency', 'hole-before-fill'],
   'character-designer': ['character-situation', 'character-reinforcement', 'hard-choices', 'information-positioning', 'avatar-character', 'companion-character', 'reward-character', 'plot-trigger-character', 'character-relationship-map', 'voice-differentiation'],
-  // 写作类
-  'story-architect': ['story-situation', 'story-arc', 'situation-is-king', 'cyclical-plot', 'situation-building-plot', 'terminal-plot', 'situation-plot-conversion', 'pressure-escalation', 'hole-before-fill', 'reverse-thinking'],
-  'episode-outliner': ['cyclical-plot', 'situation-building-plot', 'terminal-plot', 'situation-plot-conversion', 'amplify-interesting', 'hole-before-fill', 'reverse-thinking', 'pressure-escalation'],
-  'scene-writer': ['situation-is-king', 'situation-plot-conversion', 'pressure-escalation', 'hole-before-fill', 'character-situation', 'character-reinforcement', 'hard-choices', 'information-positioning', 'blame-shift-credit', 'voice-differentiation'],
-  'dialogue-polisher': ['voice-differentiation', 'subtext-first', 'meta-commentary', 'conflict-is-drama', 'information-release', 'qa-role-reversal', 'callback-echo', 'face-slap', 'tension-break', 'action-catalyzing', 'rhythm-control', 'trim-redundancy'],
+  // 写作类（五阶段管线专家；agent 正文由提交的 .md 维护，此处仅维护 skill 子集映射）
+  'story-restructurer': ['story-situation', 'story-arc', 'situation-is-king', 'cyclical-plot', 'situation-building-plot', 'terminal-plot', 'situation-plot-conversion', 'pressure-escalation', 'hole-before-fill', 'reverse-thinking', 'character-situation', 'character-reinforcement', 'hard-choices', 'blame-shift-credit', 'information-positioning', 'avatar-character', 'companion-character', 'reward-character', 'plot-trigger-character', 'story-restructurer'],
+  'plot-designer': ['cyclical-plot', 'situation-building-plot', 'terminal-plot', 'situation-plot-conversion', 'amplify-interesting', 'hole-before-fill', 'reverse-thinking', 'pressure-escalation'],
+  'scene-planner': ['hole-before-fill', 'situation-is-king', 'situation-plot-conversion', 'pressure-escalation', 'scene-optimizer'],
+  'scene-to-script': ['character-situation', 'character-reinforcement', 'hard-choices', 'information-positioning', 'voice-differentiation', 'blame-shift-credit'],
+  'dialogue-optimizer': ['voice-differentiation', 'subtext-first', 'meta-commentary', 'conflict-is-drama', 'information-release', 'qa-role-reversal', 'callback-echo', 'face-slap', 'tension-break', 'action-catalyzing', 'rhythm-control', 'trim-redundancy'],
+  'plot-to-screenplay': ['situation-is-king', 'pressure-escalation', 'hole-before-fill', 'amplify-interesting', 'rhythm-control', 'trim-redundancy', 'plot-to-screenplay'],
   // 审核类
   'chief-editor': ['editorial-standard', 'readability-review', 'situation-is-king', 'trim-redundancy'],
   'logic-checker': ['hole-before-fill', 'causal-chain-check', 'continuity-check', 'information-positioning'],
